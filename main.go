@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/IBM/sarama"
 	"kafka-lag/kafka"
@@ -36,35 +37,58 @@ func main() {
 	redisClient := redis.CreateRedisClient()
 	defer redisClient.Close()
 
-	// Channels and wait group
-	groupChan := make(chan string)
-	resultChan := make(chan structs.Group)
-	var wg sync.WaitGroup
-
-	// Fetch consumer groups
-	go kafka.FetchConsumerGroups(admin, groupChan)
-
-	// Start worker goroutines
-	numWorkers, _ := strconv.Atoi(os.Getenv("NUM_WORKERS"))
-	if numWorkers == 0 {
-		numWorkers = 5 // default number of workers
-	}
-	for i := 0; i < numWorkers; i++ {
-		wg.Add(1)
-		go kafka.FetchAndDescribeGroupTopics(admin, groupChan, resultChan, &wg)
+	// Set the iteration interval
+	interval := 30 * time.Second // default interval
+	if intervalEnv := os.Getenv("ITERATION_INTERVAL"); intervalEnv != "" {
+		if intervalVal, err := strconv.Atoi(intervalEnv); err == nil {
+			interval = time.Duration(intervalVal) * time.Second
+		}
 	}
 
-	// Close result channel when all workers are done
-	go func() {
-		wg.Wait()
-		close(resultChan)
-	}()
+	for {
+		startTime := time.Now()
+		log.Println("Starting new iteration")
 
-	// Start offset processing goroutines
-	var wg2 sync.WaitGroup
-	for i := 0; i < numWorkers; i++ {
-		wg2.Add(1)
-		go kafka.ProcessGroupOffsets(client, admin, resultChan, redisClient, &wg2, config)
+		// Channels and wait group
+		groupChan := make(chan string)
+		resultChan := make(chan structs.Group)
+		var wg sync.WaitGroup
+
+		// Fetch consumer groups
+		go kafka.FetchConsumerGroups(admin, groupChan)
+
+		// Start worker goroutines
+		numWorkers, _ := strconv.Atoi(os.Getenv("NUM_WORKERS"))
+		if numWorkers == 0 {
+			numWorkers = 5 // default number of workers
+		}
+		for i := 0; i < numWorkers; i++ {
+			wg.Add(1)
+			go kafka.FetchAndDescribeGroupTopics(admin, groupChan, resultChan, &wg)
+		}
+
+		// Close result channel when all workers are done
+		go func() {
+			wg.Wait()
+			close(resultChan)
+		}()
+
+		// Start offset processing goroutines
+		var wg2 sync.WaitGroup
+		for i := 0; i < numWorkers; i++ {
+			wg2.Add(1)
+			go kafka.ProcessGroupOffsets(client, admin, resultChan, redisClient, &wg2, config)
+		}
+		wg2.Wait()
+
+		// Calculate elapsed time and adjust sleep duration
+		elapsedTime := time.Since(startTime)
+		if elapsedTime < interval {
+			sleepDuration := interval - elapsedTime
+			log.Printf("Iteration completed. Sleeping for %v until next iteration.", sleepDuration)
+			time.Sleep(sleepDuration)
+		} else {
+			log.Println("Iteration took longer than the interval. Starting next iteration immediately.")
+		}
 	}
-	wg2.Wait()
 }
