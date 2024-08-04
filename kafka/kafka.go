@@ -166,89 +166,98 @@ func GroupPartitionsByBroker(client sarama.Client, topic structs.Topic) (map[*sa
 	return brokerPartitions, nil
 }
 
-// ProcessGroupOffsets processes group offsets
+// ProcessGroupOffsets processes group offsets and calculates lag
 func ProcessGroupOffsets(client sarama.Client, admin sarama.ClusterAdmin, groupChan <-chan structs.Group, redisClient *redis.Client, wg *sync.WaitGroup, config *sarama.Config) {
 	defer wg.Done()
 
 	for group := range groupChan {
 		var innerWg sync.WaitGroup
-		innerWg.Add(2)
+		producedOffsetsChan := make(chan map[string]map[int32]int64, 1)
+		committedOffsetsChan := make(chan map[string]map[int32]int64, 1)
 
 		// Goroutine to fetch produced offsets
-		go fetchProducedOffsets(client, group, redisClient, &innerWg, config)
+		innerWg.Add(1)
+		go func() {
+			defer innerWg.Done()
+			producedOffsets := fetchProducedOffsets(client, group, redisClient, config)
+			producedOffsetsChan <- producedOffsets
+		}()
 
 		// Goroutine to fetch committed offsets
-		go fetchCommittedOffsets(admin, group, &innerWg)
-
+		innerWg.Add(1)
+		go func() {
+			defer innerWg.Done()
+			committedOffsets := fetchCommittedOffsets(admin, group)
+			committedOffsetsChan <- committedOffsets
+		}()
 		innerWg.Wait()
+		close(producedOffsetsChan)
+		close(committedOffsetsChan)
+
+		producedOffsets := <-producedOffsetsChan
+		committedOffsets := <-committedOffsetsChan
+
+		// Calculate lag
+		calculateLag(group.Name, producedOffsets, committedOffsets)
+
 	}
 }
 
-func fetchProducedOffsets(client sarama.Client, group structs.Group, redisClient *redis.Client, wg *sync.WaitGroup, config *sarama.Config) {
-	defer wg.Done()
-
-	pipe := redisClient.Pipeline() // Start a pipeline
+func fetchProducedOffsets(client sarama.Client, group structs.Group, redisClient *redis.Client, config *sarama.Config) map[string]map[int32]int64 {
+	pipe := redisClient.Pipeline()
+	producedOffsets := make(map[string]map[int32]int64)
 
 	for _, topic := range group.Topics {
-		// Refresh metadata to ensure we have the latest information
-		err := RefreshMetadata(client, topic.Name)
-		if err != nil {
-			log.Printf("Error refreshing metadata for topic %s: %v", topic.Name, err)
-			continue
-		}
+		RefreshMetadata(client, topic.Name)
+		brokerPartitions, _ := GroupPartitionsByBroker(client, topic)
 
-		// Group partitions by their leader broker
-		brokerPartitions, err := GroupPartitionsByBroker(client, topic)
-		if err != nil {
-			log.Printf("%v", err)
-			continue
-		}
-
-		// For each broker, prepare and send an OffsetRequest for the partitions it leads
 		for broker, partitions := range brokerPartitions {
-			offsets, err := FetchOffsets(broker, topic.Name, partitions, config)
-			if err != nil {
-				log.Printf("Error fetching offsets for broker %s, topic %s: %v", broker.Addr(), topic.Name, err)
-				continue
+			offsets, _ := FetchOffsets(broker, topic.Name, partitions, config)
+			for partition, block := range offsets {
+				if block.Err == sarama.ErrNoError {
+					if producedOffsets[topic.Name] == nil {
+						producedOffsets[topic.Name] = make(map[int32]int64)
+					}
+					producedOffsets[topic.Name][partition] = block.Offsets[0]
+				}
 			}
-
 			// Store the offsets in Redis using the pipeline
 			StoreOffsetsInRedis(pipe, ctx, topic.Name, offsets)
 		}
 	}
 
-	results, err := pipe.Exec(ctx)
-	if err != nil {
-		log.Printf("Error executing Redis pipeline: %v", err)
-		for _, cmd := range results {
-			if cmd.Err() != nil {
-				log.Printf("Pipeline command error: %v", cmd.Err())
-			} else {
-				log.Printf("Pipeline command result: %v", cmd)
-			}
-		}
-	}
+	pipe.Exec(ctx)
+	return producedOffsets
 }
 
-func fetchCommittedOffsets(admin sarama.ClusterAdmin, group structs.Group, wg *sync.WaitGroup) {
-	defer wg.Done()
+func fetchCommittedOffsets(admin sarama.ClusterAdmin, group structs.Group) map[string]map[int32]int64 {
+	committedOffsets := make(map[string]map[int32]int64)
+
 	for _, topic := range group.Topics {
 		partitions := make([]int32, len(topic.Partitions))
 		for i, partition := range topic.Partitions {
 			partitions[i] = partition.Number
 		}
-		offsets, err := admin.ListConsumerGroupOffsets(group.Name, map[string][]int32{topic.Name: partitions})
-		if err != nil {
-			log.Printf("Error fetching committed offsets for group %s: %v", group.Name, err)
-			continue
-		}
-
+		offsets, _ := admin.ListConsumerGroupOffsets(group.Name, map[string][]int32{topic.Name: partitions})
 		for partition, block := range offsets.Blocks[topic.Name] {
-			if block.Err != sarama.ErrNoError {
-				log.Printf("Error fetching committed offset for topic %s partition %d: %v", topic.Name, partition, block.Err)
-				continue
+			if block.Err == sarama.ErrNoError {
+				if committedOffsets[topic.Name] == nil {
+					committedOffsets[topic.Name] = make(map[int32]int64)
+				}
+				committedOffsets[topic.Name][partition] = block.Offset
 			}
-			fmt.Printf("Committed Offset - Group: %s, Topic: %s, Partition: %d, Offset: %d\n", group.Name, topic.Name, partition, block.Offset)
+		}
+	}
+
+	return committedOffsets
+}
+
+func calculateLag(groupName string, producedOffsets, committedOffsets map[string]map[int32]int64) {
+	for topic, partitions := range producedOffsets {
+		for partition, producedOffset := range partitions {
+			committedOffset := committedOffsets[topic][partition]
+			lag := producedOffset - committedOffset
+			log.Printf("Lag - Group: %s, Topic: %s, Partition: %d, Lag: %d", groupName, topic, partition, lag)
 		}
 	}
 }
