@@ -2,19 +2,28 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/IBM/sarama"
 	"kafka-lag/kafka"
 	"kafka-lag/redis"
 	"kafka-lag/structs"
+
+	"github.com/IBM/sarama"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
+	// Set up Prometheus HTTP handler
+	http.Handle("/metrics", promhttp.Handler())
+	go func() {
+		log.Fatal(http.ListenAndServe(":9090", nil)) // Expose metrics on port 9090
+	}()
+
 	// Set up Sarama configuration
 	config := sarama.NewConfig()
 	config.Version = sarama.V2_1_0_0 // specify appropriate Kafka version

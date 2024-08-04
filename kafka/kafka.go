@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
 	"sync"
 
 	"kafka-lag/structs"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/IBM/sarama"
 	"github.com/go-redis/redis/v8"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 var ctx = context.Background()
@@ -258,6 +260,13 @@ func calculateLag(groupName string, producedOffsets, committedOffsets map[string
 			committedOffset := committedOffsets[topic][partition]
 			lag := producedOffset - committedOffset
 			log.Printf("Lag - Group: %s, Topic: %s, Partition: %d, Lag: %d", groupName, topic, partition, lag)
+
+			// Record the lag in Prometheus
+			KafkaLagOffset.With(prometheus.Labels{
+				"group":     groupName,
+				"topic":     topic,
+				"partition": strconv.Itoa(int(partition)),
+			}).Set(float64(lag))
 		}
 	}
 }
