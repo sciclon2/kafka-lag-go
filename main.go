@@ -1,0 +1,70 @@
+package main
+
+import (
+	"log"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
+
+	"github.com/IBM/sarama"
+	"kafka-lag/kafka"
+	"kafka-lag/redis"
+	"kafka-lag/structs"
+)
+
+func main() {
+	// Set up Sarama configuration
+	config := sarama.NewConfig()
+	config.Version = sarama.V2_1_0_0 // specify appropriate Kafka version
+
+	// Read broker addresses from environment variables or use default
+	brokers := []string{"localhost:29092"} // update with your broker addresses
+	if brokersEnv := os.Getenv("KAFKA_BROKERS"); brokersEnv != "" {
+		brokers = strings.Split(brokersEnv, ",")
+	}
+
+	// Create Kafka client and admin
+	client, admin, err := kafka.CreateAdminAndClient(brokers, config)
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+	defer client.Close()
+	defer admin.Close()
+
+	// Create Redis client
+	redisClient := redis.CreateRedisClient()
+	defer redisClient.Close()
+
+	// Channels and wait group
+	groupChan := make(chan string)
+	resultChan := make(chan structs.Group)
+	var wg sync.WaitGroup
+
+	// Fetch consumer groups
+	go kafka.FetchConsumerGroups(admin, groupChan)
+
+	// Start worker goroutines
+	numWorkers, _ := strconv.Atoi(os.Getenv("NUM_WORKERS"))
+	if numWorkers == 0 {
+		numWorkers = 5 // default number of workers
+	}
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go kafka.FetchAndDescribeGroupTopics(admin, groupChan, resultChan, &wg)
+	}
+
+	// Close result channel when all workers are done
+	go func() {
+		wg.Wait()
+		close(resultChan)
+	}()
+
+	// Start offset processing goroutines
+	var wg2 sync.WaitGroup
+	for i := 0; i < numWorkers; i++ {
+		wg2.Add(1)
+		go kafka.ProcessGroupOffsets(client, admin, resultChan, redisClient, &wg2, config)
+	}
+	wg2.Wait()
+}
