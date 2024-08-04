@@ -6,10 +6,11 @@ import (
 	"log"
 	"sync"
 
-	"github.com/IBM/sarama"
-	"github.com/go-redis/redis/v8"
 	"kafka-lag/structs"
 	"kafka-lag/utils"
+
+	"github.com/IBM/sarama"
+	"github.com/go-redis/redis/v8"
 )
 
 var ctx = context.Background()
@@ -32,6 +33,7 @@ func CreateAdminAndClient(brokers []string, config *sarama.Config) (sarama.Clien
 
 // FetchConsumerGroups fetches all consumer groups
 func FetchConsumerGroups(admin sarama.ClusterAdmin, groupChan chan<- string) {
+	log.Println("Fetching consumer groups")
 	consumerGroups, err := admin.ListConsumerGroups()
 	if err != nil {
 		log.Fatalf("Error listing consumer groups: %v", err)
@@ -99,13 +101,14 @@ func FetchAndDescribeGroupTopics(admin sarama.ClusterAdmin, groupChan <-chan str
 
 		topics, err := FetchTopicsForGroup(admin, groupID)
 		if err != nil {
-			log.Printf("%v", err)
+			log.Printf("Error fetching topics for group %s: %v", groupID, err)
 			continue
 		}
 
+		log.Printf("Fetched topics for group %s: %v", groupID, topics)
 		topicDetails, err := DescribeTopics(admin, topics)
 		if err != nil {
-			log.Printf("%v", err)
+			log.Printf("Error describing topics for group %s: %v", groupID, err)
 			continue
 		}
 
