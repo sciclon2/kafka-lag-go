@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/IBM/sarama"
+	"github.com/go-redis/redis/v8"
 )
 
 func StoreOffsetsInRedis(pipe redis.Pipeliner, ctx context.Context, topicName string, offsets map[int32]*sarama.OffsetResponseBlock) {
@@ -49,6 +49,7 @@ func StoreOffsetsInRedis(pipe redis.Pipeliner, ctx context.Context, topicName st
 		timestamp := strconv.FormatInt(time.Now().UnixNano()/int64(time.Millisecond), 10)
 		key := fmt.Sprintf("%s:%d", topicName, partition)
 		score := offset
+		log.Printf("Storing offset in Redis - Topic: %s, Partition: %d, Offset: %d, Timestamp: %s", topicName, partition, offset, timestamp)
 
 		// Execute the Lua script within the pipeline
 		pipe.Eval(ctx, luaScript, []string{key}, score, timestamp)
