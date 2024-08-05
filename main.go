@@ -46,6 +46,19 @@ func main() {
 	redisClient := redis.CreateRedisClient()
 	defer redisClient.Close()
 
+	// Register node
+	nodeID, err := redis.RegisterNode(redisClient)
+	if err != nil {
+		log.Fatalf("Failed to register node: %v", err)
+	}
+	defer func() {
+		if err := redis.DeregisterNode(redisClient, nodeID); err != nil {
+			log.Printf("Failed to deregister node: %v", err)
+		}
+	}()
+
+	log.Printf("Node registered with ID %d", nodeID)
+
 	// Set the iteration interval
 	interval := 30 * time.Second // default interval
 	if intervalEnv := os.Getenv("ITERATION_INTERVAL"); intervalEnv != "" {
@@ -57,6 +70,13 @@ func main() {
 	for {
 		startTime := time.Now()
 		log.Println("Starting new iteration")
+
+		// Refresh node registration
+		err = redis.RefreshNode(redisClient, nodeID)
+		if err != nil {
+			log.Printf("Failed to refresh node registration: %v", err)
+			break
+		}
 
 		// Channels and wait group
 		groupChan := make(chan string)
