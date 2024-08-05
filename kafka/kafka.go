@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"kafka-lag/structs"
 	"kafka-lag/utils"
@@ -95,29 +96,43 @@ func DescribeTopics(admin sarama.ClusterAdmin, topics []string) ([]structs.Topic
 }
 
 // FetchAndDescribeGroupTopics fetches and describes group topics
-func FetchAndDescribeGroupTopics(admin sarama.ClusterAdmin, groupChan <-chan string, resultChan chan<- structs.Group, wg *sync.WaitGroup) {
+func FetchAndDescribeGroupTopics(admin sarama.ClusterAdmin, groupChan <-chan string, resultChan chan<- structs.Group, wg *sync.WaitGroup, nodeIndex, totalNodes int) {
 	defer wg.Done()
 
 	for groupID := range groupChan {
-		var group structs.Group
-		group.Name = groupID
+		log.Printf("Checking if group %s should be processed by node index %d out of %d nodes", groupID, nodeIndex, totalNodes)
+		if shouldProcessGroup(groupID, nodeIndex, totalNodes) {
+			var group structs.Group
+			group.Name = groupID
 
-		topics, err := FetchTopicsForGroup(admin, groupID)
-		if err != nil {
-			log.Printf("Error fetching topics for group %s: %v", groupID, err)
-			continue
+			topics, err := FetchTopicsForGroup(admin, groupID)
+			if err != nil {
+				log.Printf("Error fetching topics for group %s: %v", groupID, err)
+				continue
+			}
+
+			log.Printf("Fetched topics for group %s: %v", groupID, topics)
+			topicDetails, err := DescribeTopics(admin, topics)
+			if err != nil {
+				log.Printf("Error describing topics for group %s: %v", groupID, err)
+				continue
+			}
+
+			group.Topics = topicDetails
+			resultChan <- group
 		}
-
-		log.Printf("Fetched topics for group %s: %v", groupID, topics)
-		topicDetails, err := DescribeTopics(admin, topics)
-		if err != nil {
-			log.Printf("Error describing topics for group %s: %v", groupID, err)
-			continue
-		}
-
-		group.Topics = topicDetails
-		resultChan <- group
 	}
+}
+
+// shouldProcessGroup determines if the current node should process the given groupID
+func shouldProcessGroup(groupID string, nodeIndex, totalNodes int) bool {
+	hash := sha256.New()
+	hash.Write([]byte(groupID))
+	hashSum := hash.Sum(nil)
+	hashInt := int(hashSum[0])<<24 + int(hashSum[1])<<16 + int(hashSum[2])<<8 + int(hashSum[3])
+	shouldProcess := hashInt%totalNodes == nodeIndex
+	log.Printf("Group %s hash %d, should process: %v", groupID, hashInt%totalNodes, shouldProcess)
+	return shouldProcess
 }
 
 // FetchOffsets fetches offsets from a broker
