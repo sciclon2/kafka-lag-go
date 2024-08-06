@@ -1,0 +1,15 @@
+prometheus:
+  metrics_port: 9090
+
+kafka:
+  version: "2.1.0"
+  brokers:
+    - "localhost:29092"
+
+redis:
+  address: "localhost"
+  port: 6379
+
+app:
+  iteration_interval: 15s
+  num_workers: 5

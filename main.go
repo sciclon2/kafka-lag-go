@@ -4,12 +4,11 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
+	"kafka-lag/config"
 	"kafka-lag/kafka"
 	"kafka-lag/redis"
 	"kafka-lag/structs"
@@ -26,39 +25,43 @@ func generateNodeID() string {
 }
 
 func main() {
+	// Load configuration
+	cfg, err := config.LoadConfig("examples/config.yaml")
+	if err != nil {
+		log.Fatalf("Failed to load configuration: %v", err)
+	}
+
 	// Set up Prometheus HTTP handler
 	http.Handle("/metrics", promhttp.Handler())
 	go func() {
-		log.Fatal(http.ListenAndServe(":9090", nil)) // Expose metrics on port 9090
+		log.Fatal(http.ListenAndServe(":"+strconv.Itoa(cfg.Prometheus.MetricsPort), nil)) // Expose metrics on the configured port
 	}()
 
 	// Set up Sarama configuration
-	config := sarama.NewConfig()
-	config.Version = sarama.V2_1_0_0 // specify appropriate Kafka version
-
-	// Read broker addresses from environment variables or use default
-	brokers := []string{"localhost:29092"} // update with your broker addresses
-	if brokersEnv := os.Getenv("KAFKA_BROKERS"); brokersEnv != "" {
-		brokers = strings.Split(brokersEnv, ",")
+	kafkaConfig := sarama.NewConfig()
+	kafkaVersion, err := sarama.ParseKafkaVersion(cfg.Kafka.Version)
+	if err != nil {
+		log.Fatalf("Error parsing Kafka version: %v", err)
 	}
+	kafkaConfig.Version = kafkaVersion
 
 	// Create Kafka client and admin
-	client, admin, err := kafka.CreateAdminAndClient(brokers, config)
+	client, admin, err := kafka.CreateAdminAndClient(cfg.Kafka.Brokers, kafkaConfig)
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
 	defer client.Close()
 	defer admin.Close()
 
-	// Create Redis client
-	redisClient := redis.CreateRedisClient()
+	// Create Redis client using the CreateRedisClient function
+	redisClient := redis.CreateRedisClient(cfg.GetRedisAddress())
 	defer redisClient.Close()
 
 	// Generate a random node ID
 	nodeID := generateNodeID()
 
 	// Register node
-	err = redis.RegisterNode(redisClient, nodeID)
+	err = redis.RegisterNode(redisClient, nodeID, 10)
 	if err != nil {
 		log.Fatalf("Failed to register node: %v", err)
 	}
@@ -71,41 +74,42 @@ func main() {
 	log.Printf("Node registered with ID %s", nodeID)
 
 	// Set the iteration interval
-	interval := 30 * time.Second // default interval
-	if intervalEnv := os.Getenv("ITERATION_INTERVAL"); intervalEnv != "" {
-		if intervalVal, err := strconv.Atoi(intervalEnv); err == nil {
-			interval = time.Duration(intervalVal) * time.Second
-		}
+	iterationInterval, err := cfg.GetIterationInterval()
+	if err != nil {
+		log.Fatalf("Invalid iteration interval: %v", err)
 	}
+
+	// Define the internal health check intervals
+	const (
+		heartbeatInterval = 5 * time.Second
+		monitorInterval   = 10 * time.Second
+	)
 
 	// Start goroutine for periodic Redis node refresh (heartbeats)
 	go func() {
-		ticker := time.NewTicker(interval)
+		ticker := time.NewTicker(heartbeatInterval)
 		defer ticker.Stop()
 		for {
-			select {
-			case <-ticker.C:
-				if err := redis.RefreshNode(redisClient, nodeID); err != nil {
-					log.Printf("Failed to refresh node registration: %v", err)
-				}
+			<-ticker.C
+			err := redis.RefreshNode(redisClient, nodeID, 10)
+			if err != nil {
+				log.Printf("Failed to refresh node registration: %v", err)
 			}
 		}
 	}()
 
 	// Start goroutine for monitoring nodes
 	go func() {
-		ticker := time.NewTicker(30 * time.Second)
+		ticker := time.NewTicker(monitorInterval)
 		defer ticker.Stop()
 		for {
-			select {
-			case <-ticker.C:
-				failedNodes, err := redis.MonitorNodes(redisClient)
-				if err != nil {
-					log.Printf("Failed to monitor nodes: %v", err)
-				}
-				if len(failedNodes) > 0 {
-					log.Printf("Removed failed nodes: %v", failedNodes)
-				}
+			<-ticker.C
+			failedNodes, err := redis.MonitorNodes(redisClient)
+			if err != nil {
+				log.Printf("Failed to monitor nodes: %v", err)
+			}
+			if len(failedNodes) > 0 {
+				log.Printf("Removed failed nodes: %v", failedNodes)
 			}
 		}
 	}()
@@ -139,39 +143,39 @@ func main() {
 		// Channels and wait group
 		groupChan := make(chan string)
 		resultChan := make(chan structs.Group)
-		var wg sync.WaitGroup
+		var wgFetchAndDescribeGroupTopics sync.WaitGroup
 
 		// Fetch consumer groups
 		go kafka.FetchConsumerGroups(admin, groupChan)
 
 		// Start worker goroutines
-		numWorkers, _ := strconv.Atoi(os.Getenv("NUM_WORKERS"))
+		numWorkers := cfg.App.NumWorkers
 		if numWorkers == 0 {
 			numWorkers = 5 // default number of workers
 		}
 		for i := 0; i < numWorkers; i++ {
-			wg.Add(1)
-			go kafka.FetchAndDescribeGroupTopics(admin, groupChan, resultChan, &wg, nodeIndex, totalNodes)
+			wgFetchAndDescribeGroupTopics.Add(1)
+			go kafka.FetchAndDescribeGroupTopics(admin, groupChan, resultChan, &wgFetchAndDescribeGroupTopics, nodeIndex, totalNodes)
 		}
 
 		// Close result channel when all workers are done
 		go func() {
-			wg.Wait()
+			wgFetchAndDescribeGroupTopics.Wait()
 			close(resultChan)
 		}()
 
 		// Start offset processing goroutines
-		var wg2 sync.WaitGroup
+		var wgProcessGroupOffsets sync.WaitGroup
 		for i := 0; i < numWorkers; i++ {
-			wg2.Add(1)
-			go kafka.ProcessGroupOffsets(client, admin, resultChan, redisClient, &wg2, config)
+			wgProcessGroupOffsets.Add(1)
+			go kafka.ProcessGroupOffsets(client, admin, resultChan, redisClient, &wgProcessGroupOffsets, kafkaConfig)
 		}
-		wg2.Wait()
+		wgProcessGroupOffsets.Wait()
 
 		// Calculate elapsed time and adjust sleep duration
 		elapsedTime := time.Since(startTime)
-		if elapsedTime < interval {
-			sleepDuration := interval - elapsedTime
+		if elapsedTime < iterationInterval {
+			sleepDuration := iterationInterval - elapsedTime
 			log.Printf("Iteration completed. Sleeping for %v until next iteration.", sleepDuration)
 			time.Sleep(sleepDuration)
 		} else {

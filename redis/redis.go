@@ -8,11 +8,12 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
-func CreateRedisClient() *redis.Client {
+// CreateRedisClient creates a new Redis client using the provided address
+func CreateRedisClient(redisAddress string) *redis.Client {
 	client := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379", // Update with your Redis server address
-		Password: "",               // No password set
-		DB:       0,                // Use default DB
+		Addr:     redisAddress,
+		Password: "", // No password set
+		DB:       0,  // Use default DB
 	})
 	return client
 }
@@ -24,9 +25,10 @@ const luaScript = `
 -- Register Node
 if KEYS[1] == "register" then
 	local node_key = 'node:' .. ARGV[1]
+	local ttl = ARGV[2]
 	local created = redis.call('SETNX', node_key, 'active')
 	if created == 1 then
-		redis.call('EXPIRE', node_key, 60) -- Set expiry to 60 seconds
+		redis.call('EXPIRE', node_key, ttl)
 		redis.call('SADD', 'active_nodes', ARGV[1])
 		return node_key
 	else
@@ -62,8 +64,8 @@ end
 `
 
 // RegisterNode registers a node with a unique ID using a Lua script
-func RegisterNode(client *redis.Client, nodeID string) error {
-	_, err := client.Eval(ctx, luaScript, []string{"register"}, nodeID).Result()
+func RegisterNode(client *redis.Client, nodeID string, ttl int) error {
+	_, err := client.Eval(ctx, luaScript, []string{"register"}, nodeID, ttl).Result()
 	if err != nil {
 		return fmt.Errorf("error executing Lua script for registration: %v", err)
 	}
@@ -80,9 +82,9 @@ func DeregisterNode(client *redis.Client, nodeID string) error {
 }
 
 // RefreshNode keeps the node registration alive
-func RefreshNode(client *redis.Client, nodeID string) error {
+func RefreshNode(client *redis.Client, nodeID string, ttl int) error {
 	nodeKey := fmt.Sprintf("node:%s", nodeID)
-	_, err := client.Expire(ctx, nodeKey, 60*time.Second).Result()
+	_, err := client.Expire(ctx, nodeKey, time.Duration(ttl)*time.Second).Result()
 	if err != nil {
 		return fmt.Errorf("error refreshing node key: %v", err)
 	}
