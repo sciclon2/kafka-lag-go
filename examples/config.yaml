@@ -4,7 +4,7 @@ prometheus:
 kafka:
   version: "2.1.0"
   brokers:
-    - "localhost:29092"
+    - "localhost:9092"
 
 redis:
   address: "localhost"
