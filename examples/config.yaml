@@ -5,6 +5,9 @@ kafka:
   version: "2.1.0"
   brokers:
     - "localhost:9092"
+  consumer_groups:
+    whitelist: ""  # Regex pattern for allowed consumer groups
+    blacklist: "my-consumer-group-1"         
 
 redis:
   address: "localhost"

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"regexp"
 	"time"
 
 	"gopkg.in/yaml.v2"
@@ -15,8 +16,12 @@ type Config struct {
 		MetricsPort int `yaml:"metrics_port"`
 	} `yaml:"prometheus"`
 	Kafka struct {
-		Version string   `yaml:"version"`
-		Brokers []string `yaml:"brokers"`
+		Version        string   `yaml:"version"`
+		Brokers        []string `yaml:"brokers"`
+		ConsumerGroups struct {
+			Whitelist *regexp.Regexp `yaml:"whitelist"`
+			Blacklist *regexp.Regexp `yaml:"blacklist"`
+		} `yaml:"consumer_groups"`
 	} `yaml:"kafka"`
 	Redis struct {
 		Address string `yaml:"address"`
@@ -43,6 +48,12 @@ func LoadConfig(filePath string) (*Config, error) {
 	// Set default values if not provided
 	setDefaults(&config)
 
+	// Compile regex patterns and validate the configuration
+	err = compileRegexPatterns(&config)
+	if err != nil {
+		return nil, err
+	}
+
 	// Validate the configuration
 	err = validateConfig(&config)
 	if err != nil {
@@ -50,6 +61,29 @@ func LoadConfig(filePath string) (*Config, error) {
 	}
 
 	return &config, nil
+}
+
+// compileRegexPatterns compiles the regex patterns in the config
+func compileRegexPatterns(config *Config) error {
+	var err error
+
+	// Compile whitelist pattern if it is not nil
+	if config.Kafka.ConsumerGroups.Whitelist != nil {
+		config.Kafka.ConsumerGroups.Whitelist, err = regexp.Compile(config.Kafka.ConsumerGroups.Whitelist.String())
+		if err != nil {
+			return fmt.Errorf("invalid consumer group whitelist regex pattern: %w", err)
+		}
+	}
+
+	// Compile blacklist pattern if it is not nil
+	if config.Kafka.ConsumerGroups.Blacklist != nil {
+		config.Kafka.ConsumerGroups.Blacklist, err = regexp.Compile(config.Kafka.ConsumerGroups.Blacklist.String())
+		if err != nil {
+			return fmt.Errorf("invalid consumer group blacklist regex pattern: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // setDefaults sets default values for the configuration if not provided
@@ -71,6 +105,13 @@ func setDefaults(config *Config) {
 	}
 	if config.App.NumWorkers == 0 {
 		config.App.NumWorkers = 5
+	}
+	// Handle consumer group regex patterns
+	if config.Kafka.ConsumerGroups.Whitelist != nil && config.Kafka.ConsumerGroups.Whitelist.String() == "" {
+		config.Kafka.ConsumerGroups.Whitelist = nil
+	}
+	if config.Kafka.ConsumerGroups.Blacklist != nil && config.Kafka.ConsumerGroups.Blacklist.String() == "" {
+		config.Kafka.ConsumerGroups.Blacklist = nil
 	}
 }
 

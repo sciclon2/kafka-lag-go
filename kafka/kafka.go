@@ -4,10 +4,13 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"regexp"
 
+	"kafka-lag/config"
 	"kafka-lag/metrics"
 	"kafka-lag/structs"
 	"kafka-lag/utils"
+
 	"log"
 	"sync"
 
@@ -33,18 +36,46 @@ func CreateAdminAndClient(brokers []string, config *sarama.Config) (sarama.Clien
 	return client, admin, nil
 }
 
-// FetchConsumerGroups fetches all consumer groups
-func FetchConsumerGroups(admin sarama.ClusterAdmin, groupChan chan<- string) {
+// FetchConsumerGroups fetches all consumer groups and applies blacklist and whitelist filters.
+func FetchConsumerGroups(admin sarama.ClusterAdmin, groupChan chan<- string, config *config.Config) {
 	log.Println("Fetching consumer groups")
 	consumerGroups, err := admin.ListConsumerGroups()
 	if err != nil {
 		log.Fatalf("Error listing consumer groups: %v", err)
 	}
 
+	// Prepare regex patterns from the config
+	blacklist := config.Kafka.ConsumerGroups.Blacklist
+	whitelist := config.Kafka.ConsumerGroups.Whitelist
+
 	for groupID := range consumerGroups {
-		groupChan <- groupID
+		// Apply filters to each consumer group
+		if isGroupAllowed(groupID, blacklist, whitelist) {
+			groupChan <- groupID
+		}
 	}
 	close(groupChan)
+}
+
+// isGroupAllowed checks if the consumer group is allowed based on blacklist and whitelist filters.
+func isGroupAllowed(groupID string, blacklist *regexp.Regexp, whitelist *regexp.Regexp) bool {
+	if whitelist != nil {
+		if whitelist.MatchString(groupID) {
+			log.Printf("Group '%s' is allowed by whitelist", groupID)
+			return true
+		} else {
+			log.Printf("Group '%s' is excluded because it does not match the whitelist", groupID)
+			return false
+		}
+	}
+
+	if blacklist != nil {
+		if blacklist.MatchString(groupID) {
+			log.Printf("Group '%s' is excluded by blacklist", groupID)
+			return false
+		}
+	}
+	return true
 }
 
 // FetchTopicsForGroup fetches topics for a consumer group

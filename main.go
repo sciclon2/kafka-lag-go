@@ -146,7 +146,7 @@ func main() {
 		var wgFetchAndDescribeGroupTopics sync.WaitGroup
 
 		// Fetch consumer groups
-		go kafka.FetchConsumerGroups(admin, groupChan)
+		go kafka.FetchConsumerGroups(admin, groupChan, cfg)
 
 		// Start worker goroutines
 		numWorkers := cfg.App.NumWorkers
