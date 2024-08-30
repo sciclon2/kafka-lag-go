@@ -2,6 +2,10 @@
 
 Kafka Lag Calculator is a lightweight, stateless application designed to calculate Kafka consumer group lag in both offsets and seconds. It efficiently processes Kafka consumer group data using a pipeline pattern implemented with Go’s goroutines and channels, ensuring high performance and scalability. The application employs consistent hashing to distribute work evenly among multiple nodes, making it suitable for deployment in distributed environments.
 
+The method for estimating lag in seconds used by Kafka Lag Calculator is inspired by the implementation found in the Kafka Lag Exporter project, which is currently in maintenance mode. Kafka Lag Calculator uses both interpolation and extrapolation techniques to approximate the lag in seconds for each partition within a Kafka consumer group.
+
+This strategy provides a reasonable estimate of the time delay between message production and consumption, even in cases where the offset data is sparse or not evenly distributed. However, it is important to note that this is an approximation and not an exact measure, making it useful for gaining insights into lag trends rather than precise calculations.
+
 ## Features
 
 - Offset Lag Calculation: Accurately computes the difference between the latest produced offset and the committed offset for each partition, topic, and consumer group.
@@ -23,7 +27,7 @@ In performance tests against other open-source solutions, Kafka Lag Calculator h
 
 ### Prerequisites
 
-- Docker (optional, it ca run in standalone as well)
+- Docker (optional, it can run in standalone as well)
 - A running Redis instance (for now the only supported storage)
 - A running Kafka cluster
 
