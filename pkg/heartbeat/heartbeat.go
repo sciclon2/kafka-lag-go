@@ -63,7 +63,7 @@ func (ah *ApplicationHeartbeat) Start() {
 
 			// Log the result of the health check
 			if healthy {
-				logrus.Info("Application heartbeat check passed")
+				logrus.Debugf("Application heartbeat check passed")
 			} else {
 				logrus.Warn("Application heartbeat check failed")
 			}

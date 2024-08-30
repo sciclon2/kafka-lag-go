@@ -31,6 +31,16 @@ In performance tests against other open-source solutions, Kafka Lag Calculator h
 - A running Redis instance (for now the only supported storage)
 - A running Kafka cluster
 
+## Platform Compatibility
+
+These images are available on Docker Hub and can be pulled and run on systems with the corresponding platforms:
+
+- Linux/amd64
+- Linux/arm64
+- Linux/arm/v7
+
+If you require Kafka Lag Calculator to run on other architectures or platforms, you can easily compile the application from the source code to suit your needs. The flexibility of the Go programming language ensures that Kafka Lag Calculator can be built and run virtually anywhere Go is supported.
+
 
 ## Installation
 

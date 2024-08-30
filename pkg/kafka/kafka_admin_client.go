@@ -92,9 +92,6 @@ func CreateAdminAndClient(cfg *config.Config, saramaConfig *sarama.Config) (Kafk
 	return client, admin, nil
 }
 
-// setKafkaVersion configures the Kafka version for the Sarama client by parsing the version string
-// provided in the configuration. It ensures that the Sarama client operates with the correct Kafka version,
-// which is critical for compatibility with the Kafka cluster.
 func setKafkaVersion(versionStr string, saramaConfig *sarama.Config) error {
 	logrus.Debugf("Setting Kafka version to %s", versionStr)
 	version, err := sarama.ParseKafkaVersion(versionStr)
@@ -106,9 +103,6 @@ func setKafkaVersion(versionStr string, saramaConfig *sarama.Config) error {
 	return nil
 }
 
-// configureTLS applies TLS configuration to the Sarama client based on the provided configuration settings.
-// It sets up the TLS context, including the use of CA certificates and client certificates if specified.
-// This ensures secure communication between the Kafka client and the Kafka brokers.
 func configureTLS(cfg *config.Config, saramaConfig *sarama.Config) error {
 	logrus.Debug("Configuring TLS settings")
 	tlsConfig, err := createTLSConfiguration(cfg)
@@ -121,8 +115,6 @@ func configureTLS(cfg *config.Config, saramaConfig *sarama.Config) error {
 	return nil
 }
 
-// createTLSConfiguration generates a TLS configuration for the Sarama client based on the provided configuration.
-// It handles the loading of CA certificates and client certificates, ensuring secure communication with Kafka brokers.
 func createTLSConfiguration(cfg *config.Config) (*tls.Config, error) {
 	logrus.Debug("Creating TLS configuration")
 	sslConfig := cfg.Kafka.SSL

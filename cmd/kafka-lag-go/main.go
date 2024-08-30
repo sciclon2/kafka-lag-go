@@ -52,13 +52,13 @@ func main() {
 	if err != nil {
 		logrus.Fatalf("%v", err)
 	}
-	defer client.Close() // Ensure the Kafka client is closed when the application exits.
-	defer admin.Close()  // Ensure the Kafka admin client is closed when the application exits.
+	defer client.Close()
+	defer admin.Close()
 
 	// Set up and start Prometheus metrics HTTP server.
 	http.Handle("/metrics", promhttp.Handler())
 	go func() {
-		logrus.Fatal(http.ListenAndServe(":"+strconv.Itoa(cfg.Prometheus.MetricsPort), nil)) // Expose metrics on the configured port.
+		logrus.Fatal(http.ListenAndServe(":"+strconv.Itoa(cfg.Prometheus.MetricsPort), nil))
 	}()
 
 	// Initialize the Storage interface using the function from the storage package
@@ -66,8 +66,6 @@ func main() {
 	if err != nil {
 		logrus.Fatalf("Failed to initialize storage: %v\n", err)
 	}
-
-	// Ensure the Storage is properly closed when main exits
 	defer store.GracefulStop()
 
 	// Initialize and start the ApplicationHeartbeat
@@ -132,16 +130,15 @@ func main() {
 		groupStructCompleteAndPersistedChan := make(chan *structs.Group)
 		metricsToExportChan := make(chan *structs.Group)
 
-		// Start fetching consumer groups in a separate goroutine.
+		// Start fetching consumer groups
 		kafka.FetchConsumerGroups(admin, groupNameChan, cfg)
 
-		// Fetch and describe group topics using the refactored function
+		// Fetch and describe group topics
 		kafka.GetConsumerGroupsInfo(admin, client, groupNameChan, groupStructPartialChan, cfg.App.NumWorkers, registeredNodeIndex, totalNodes)
 
-		// Process group offsets using the refactored function
+		// Process group offsets
 		kafka.GetLatestProducedOffsets(admin, groupStructPartialChan, groupStructCompleteChan, cfg.App.NumWorkers, saramaConfig)
 
-		//consumeAndPrintGroupStruct(groupStructCompleteChan)
 		store.PersistLatestProducedOffsets(groupStructCompleteChan, groupStructCompleteAndPersistedChan, cfg.App.NumWorkers)
 
 		// Create an instance of LagProcessor
@@ -158,7 +155,6 @@ func main() {
 // SleepToMaintainInterval calculates the elapsed time for an iteration and sleeps if necessary to maintain the configured interval.
 // It returns the elapsed time for logging or further processing.
 func SleepToMaintainInterval(startTime time.Time, iterationInterval time.Duration) time.Duration {
-	// Calculate the elapsed time for the iteration.
 	elapsedTime := time.Since(startTime)
 
 	// Determine if sleep is needed to maintain the iteration interval.

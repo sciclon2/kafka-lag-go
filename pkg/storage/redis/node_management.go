@@ -100,15 +100,6 @@ func (rm *RedisManager) StartNodeHeartbeat(nodeID string, heartbeatInterval time
 	}()
 }
 
-// StartNodeMonitoring starts a goroutine that periodically invokes `PurgeInactiveNodes`
-// to remove inactive nodes from Redis. This function sets up a ticker that triggers
-// the purging process at intervals defined by `monitorInterval`.
-//
-// The purging process continues running in the background until the context is canceled,
-// at which point the goroutine stops gracefully.
-//
-// This function ensures that the system's list of active nodes is regularly cleaned,
-// keeping it free of any nodes that have become inactive.
 func (rm *RedisManager) StartNodeMonitoring(monitorInterval time.Duration) {
 	go func() {
 		ticker := time.NewTicker(monitorInterval)
@@ -131,8 +122,6 @@ func (rm *RedisManager) StartNodeMonitoring(monitorInterval time.Duration) {
 	}()
 }
 
-// monitorNodes is a helper function that invokes a Lua script to check the status of nodes
-// and returns a list of failed node IDs.
 func (rm *RedisManager) monitorNodes() ([]string, error) {
 	result, err := rm.client.EvalSha(rm.ctx, rm.LuaSHA, []string{"monitor"}).Result()
 	if err != nil {

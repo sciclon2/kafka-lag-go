@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"sync"
 
@@ -58,8 +59,14 @@ func (lp *LagProcessor) processTopic(topic *structs.Topic, group *structs.Group,
 			// Calculate lags and update max values
 			lp.calculateAndAccumulateLags(partition, group, topic, &tempTopicSumLagInOffsets, &tempTopicSumLagInSeconds, &topicValidOffsetsFound, &topicValidSecondsFound)
 		} else {
-			lp.setZeroLag(partition)
-			logrus.Debugf("Skipped Partition: %d for Topic: %s due to missing offsets", partition.Number, topic.Name)
+			logMessage := fmt.Sprintf("Skipped Partition: %d for Topic: %s due to missing offsets:", partition.Number, topic.Name)
+			if partition.LatestProducedOffset == -1 {
+				logMessage += " LatestProducedOffset is not available."
+			}
+			if partition.CommitedOffset == -1 {
+				logMessage += " CommitedOffset is not available."
+			}
+			logrus.Debug(logMessage)
 		}
 	}
 
@@ -207,13 +214,6 @@ func (lp *LagProcessor) calculateTimeLag(partition *structs.Partition, group *st
 	}
 }
 
-// setZeroLag sets the lag metrics to zero when data is insufficient.
-func (lp *LagProcessor) setZeroLag(partition *structs.Partition) {
-	zeroLag := int64(0)
-	partition.LagInOffsets = zeroLag
-	partition.LagInSeconds = zeroLag
-}
-
 // computeTimeLag calculates the time lag based on the produced offsets history using interpolation or extrapolation.
 func (lp *LagProcessor) computeTimeLag(offsetsHistory *[]redis.Z, lastConsumedOffset, latestProducedOffsetAt int64) (int64, error) {
 	lowerOffset, lowerTimestamp, upperOffset, upperTimestamp, err := lp.findNearestOffsets(offsetsHistory, lastConsumedOffset, latestProducedOffsetAt)
@@ -316,7 +316,6 @@ func (lp *LagProcessor) GenerateMetrics(groupStructCompleteAndPersistedChan <-ch
 			}
 		}()
 	}
-	// Close the output channel after all input data is processed
 	go func() {
 		wg.Wait()
 		close(metricsToExportChan)

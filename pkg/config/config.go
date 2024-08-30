@@ -45,7 +45,7 @@ type Config struct {
 		} `yaml:"sasl"`
 	} `yaml:"kafka"`
 	Storage struct {
-		Type  string `yaml:"type"` // e.g., "redis", "mysql"
+		Type  string `yaml:"type"` // e.g., "redis", "mysql" (for future use)
 		Redis struct {
 			Address              string `yaml:"address"`
 			Port                 int    `yaml:"port"`
@@ -53,9 +53,6 @@ type Config struct {
 			ClientIdleTimeout    string `yaml:"client_idle_timeout"`
 			RetentionTTLSeconds  int    `yaml:"retention_ttl_seconds"`
 		} `yaml:"redis"`
-		// MySQL struct {
-		// 	DSN string `yaml:"dsn"` // Example for future MySQL storage
-		// } `yaml:"mysql"`
 	} `yaml:"storage"`
 	App struct {
 		ClusterName       string `yaml:"cluster_name"`
@@ -67,12 +64,11 @@ type Config struct {
 	} `yaml:"app"`
 }
 
-// GetConfigFilePath resolves the configuration file path from either
-// a command-line flag or an environment variable.
+// GetConfigFilePath returns the path to the configuration file
 func GetConfigFilePath() string {
 	// Define a command-line flag for the configuration file path, with no default value.
 	configPath := flag.String("config-file", "", "Path to the configuration file")
-	flag.Parse() // Parse the command-line flags
+	flag.Parse()
 
 	// Check if the configPath is provided either via the command-line flag or the environment variable.
 	if *configPath == "" {
@@ -148,7 +144,7 @@ func compileRegexPatterns(config *Config) error {
 // setDefaults sets default values for the configuration if not provided
 func setDefaults(config *Config) {
 	if config.Storage.Type == "" {
-		config.Storage.Type = "redis" // Default storage type
+		config.Storage.Type = "redis"
 	}
 	if config.Storage.Redis.Address == "" {
 		config.Storage.Redis.Address = "localhost"
@@ -160,10 +156,10 @@ func setDefaults(config *Config) {
 		config.Storage.Redis.RetentionTTLSeconds = 7200 // Default to 2 hours
 	}
 	if config.Storage.Redis.ClientRequestTimeout == "" {
-		config.Storage.Redis.ClientRequestTimeout = "60s" // default read timeout
+		config.Storage.Redis.ClientRequestTimeout = "60s"
 	}
 	if config.Storage.Redis.ClientIdleTimeout == "" {
-		config.Storage.Redis.ClientIdleTimeout = "5m" // default idle timeout
+		config.Storage.Redis.ClientIdleTimeout = "5m"
 	}
 	if config.App.IterationInterval == "" {
 		config.App.IterationInterval = "30s"
@@ -175,19 +171,19 @@ func setDefaults(config *Config) {
 		config.App.NumWorkers = runtime.NumCPU() // Default to the number of CPUs if not set
 	}
 	if config.App.LogLevel == "" {
-		config.App.LogLevel = "info" // Default log level
+		config.App.LogLevel = "info"
 	}
 	if config.App.HealthCheckPort == 0 {
-		config.App.HealthCheckPort = 8080 // Default health check port
+		config.App.HealthCheckPort = 8080
 	}
 	if config.App.HealthCheckPath == "" {
-		config.App.HealthCheckPath = "/healthz" // Default health check path
+		config.App.HealthCheckPath = "/healthz"
 	}
 	if config.Kafka.ClientRequestTimeout == "" {
-		config.Kafka.ClientRequestTimeout = "30s" // Default value for client request timeout
+		config.Kafka.ClientRequestTimeout = "30s"
 	}
 	if config.Kafka.MetadataFetchTimeout == "" {
-		config.Kafka.MetadataFetchTimeout = "5s" // Default value for metadata fetch timeout
+		config.Kafka.MetadataFetchTimeout = "5s"
 	}
 	// Handle consumer group regex patterns
 	if config.Kafka.ConsumerGroups.Whitelist != nil && config.Kafka.ConsumerGroups.Whitelist.String() == "" {
