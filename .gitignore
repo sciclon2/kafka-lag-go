@@ -1,0 +1,42 @@
+# Binaries for programs and plugins
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+
+# Output of the Go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Logs and debugging
+*.log
+
+# Directory for Go dependencies
+vendor/
+
+# Go modules files (the dependencies should be managed via go.mod and go.sum)
+go.sum
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*.bak
+*.backup
+*.tmp
+*.temp
+
+# Node.js dependencies (if your project has a frontend or uses Node.js in any way)
+node_modules/
+
+# MacOS files
+.DS_Store
+
+# Backup files
+*~
+
+# Ignore Go module files
+go.mod
+go.sum

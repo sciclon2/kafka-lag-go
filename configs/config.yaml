@@ -1,0 +1,49 @@
+# Prometheus settings for monitoring and metrics exposure
+prometheus:
+  metrics_port: 9090  # (Optional) Port where Prometheus metrics will be exposed, default: 9090
+  labels:            # (Optional) Custom labels to add to all Prometheus metrics
+    environment: "production"
+
+# Kafka settings for connecting to the Kafka cluster
+kafka:
+  brokers:              # (Mandatory) List of Kafka broker addresses
+    - "broker1:9092"
+    - "broker2:9092"
+  client_request_timeout: "30s"  # (Optional) Timeout for Kafka client requests, default: "30s"
+  metadata_fetch_timeout: "5s"   # (Optional) Timeout for fetching Kafka metadata, default: "5s"
+  
+  consumer_groups:
+    whitelist: null   # (Optional) Regex pattern for consumer group whitelist, default: null
+    blacklist: null   # (Optional) Regex pattern for consumer group blacklist, default: null
+
+  ssl:                 # SSL settings for secure communication with Kafka brokers
+    enabled: false     # (Optional) Enable SSL, default: false
+    client_certificate_file: ""  # (Optional if SSL enabled) Path to the client certificate file
+    client_key_file: ""          # (Optional if SSL enabled) Path to the client key file
+    insecure_skip_verify: true   # (Optional) Skip SSL certificate verification, default: true
+
+  sasl:                # SASL authentication settings
+    enabled: false     # (Optional) Enable SASL, default: false
+    mechanism: "SCRAM-SHA-256"  # (Optional) SASL mechanism, must be "SCRAM-SHA-256" or "SCRAM-SHA-512", default: "SCRAM-SHA-256"
+    user: ""           # (Mandatory if SASL enabled) SASL username
+    password: ""       # (Mandatory if SASL enabled) SASL password
+
+# Storage settings for persisting data, currently only Redis is supported
+storage:
+  type: "redis"        # (Mandatory) Storage type, default: "redis"
+  redis:
+    address: "localhost"  # (Optional) Redis server address, default: "localhost"
+    port: 6379            # (Optional) Redis server port, default: 6379
+    client_request_timeout: "60s"  # (Optional) Timeout for Redis client requests, default: "60s"
+    client_idle_timeout: "5m"      # (Optional) Idle timeout for Redis client, default: "5m"
+    retention_ttl_seconds: 7200    # (Optional) Time-to-live for Redis data in seconds, default: 7200 (2 hours)
+
+# Application-specific settings
+app:
+  cluster_name: "my-cluster"     # (Mandatory) Name of the Kafka cluster being monitored
+  iteration_interval: "30s"      # (Optional) Interval between iterations, default: "30s"
+  num_workers: 5                 # (Optional) Number of worker goroutines, default: number of CPUs
+  log_level: "info"              # (Optional) Logging level, default: "info"
+  health_check_port: 8080        # (Optional) Port for health checks, default: 8080
+  health_check_path: "/healthz"  # (Optional) Path for health checks, default: "/healthz"
+

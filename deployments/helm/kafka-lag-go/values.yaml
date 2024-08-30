@@ -1,0 +1,25 @@
+replicaCount: 2
+
+image:
+  repository: "sciclon2/kafka-lag-go"
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+resources:
+  requests:
+    memory: "64Mi"
+    cpu: "250m"
+  limits:
+    memory: "128Mi"
+    cpu: "500m"
+
+prometheus:
+  enabled: true
+  path: "/metrics"
+  port: 9090
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
