@@ -105,3 +105,20 @@ func (m *MockRedisClient) Ping(ctx context.Context) *redis.StatusCmd {
 func createMockRedisClient() *MockRedisClient {
 	return new(MockRedisClient)
 }
+
+// MockStorage is a mock implementation of the Storage interface for testing purposes.
+type MockStorage struct {
+	mock.Mock
+}
+
+// Ping mocks the Ping method of the Storage interface.
+func (m *MockStorage) Ping(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
+// Close mocks the Close method of the Storage interface.
+func (m *MockStorage) Close() error {
+	args := m.Called()
+	return args.Error(0)
+}
