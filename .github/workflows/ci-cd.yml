@@ -52,7 +52,7 @@ jobs:
       run: sudo apt-get update && sudo apt-get install -y docker-compose
 
     - name: Run E2E tests in Go container
-      run: ./e2e_tests.sh
+      run: ./tests/e2e/run.sh
 
   build-and-push-dev:
     name: Build and Push DEV Stage
