@@ -2,11 +2,12 @@ package main
 
 import (
 	"log"
-	"net/http"
-	"strconv"
+	"os"
 	"time"
 
 	"github.com/sciclon2/kafka-lag-go/pkg/config"
+	maininit "github.com/sciclon2/kafka-lag-go/pkg/init"
+
 	"github.com/sciclon2/kafka-lag-go/pkg/heartbeat"
 	"github.com/sciclon2/kafka-lag-go/pkg/kafka"
 	"github.com/sciclon2/kafka-lag-go/pkg/metrics"
@@ -15,9 +16,7 @@ import (
 
 	_ "net/http/pprof"
 
-	"github.com/IBM/sarama"
 	"github.com/google/uuid"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 )
 
@@ -33,39 +32,24 @@ func generateNodeID() string {
 }
 
 func main() {
+	// Initialize signal handling
+	sigChan := maininit.InitializeSignalHandling()
 
-	// Get the configuration file path using the helper function.
-	configPath := config.GetConfigFilePath()
-
-	// Load configuration from the specified YAML file.
-	cfg, err := config.LoadConfig(configPath)
-	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
-	}
+	cfg := maininit.InitializeConfigAndLogging()
 
 	// Set up logging
 	cfg.SetLogLevel()
 
-	// Set up Sarama (Kafka client) configuration.
-	saramaConfig := sarama.NewConfig()
-	client, admin, err := kafka.CreateAdminAndClient(cfg, saramaConfig)
-	if err != nil {
-		logrus.Fatalf("%v", err)
-	}
+	// Initialize Kafka client and admin
+	client, admin, saramaConfig := maininit.InitializeKafkaClient(cfg)
 	defer client.Close()
 	defer admin.Close()
 
 	// Set up and start Prometheus metrics HTTP server.
-	http.Handle("/metrics", promhttp.Handler())
-	go func() {
-		logrus.Fatal(http.ListenAndServe(":"+strconv.Itoa(cfg.Prometheus.MetricsPort), nil))
-	}()
+	maininit.InitializeMetricsServer(cfg)
 
 	// Initialize the Storage interface using the function from the storage package
-	store, err := storage.InitializeStorage(cfg)
-	if err != nil {
-		logrus.Fatalf("Failed to initialize storage: %v\n", err)
-	}
+	store := maininit.InitializeStorage(cfg)
 	defer store.GracefulStop()
 
 	// Initialize and start the ApplicationHeartbeat
@@ -148,26 +132,45 @@ func main() {
 		// Start processing metrics concurrently
 		prometheusMetrics.ProcessMetrics(metricsToExportChan, cfg.App.NumWorkers, startTime)
 
-		SleepToMaintainInterval(startTime, iterationInterval)
+		// Wait for the next iteration or handle a signal
+		SleepToMaintainInterval(startTime, iterationInterval, sigChan)
 	}
 }
 
-// SleepToMaintainInterval calculates the elapsed time for an iteration and sleeps if necessary to maintain the configured interval.
-// It returns the elapsed time for logging or further processing.
-func SleepToMaintainInterval(startTime time.Time, iterationInterval time.Duration) time.Duration {
-	elapsedTime := time.Since(startTime)
+// SleepToMaintainInterval ensures the iteration runs at the configured interval,
+// but can be interrupted by a user signal to proceed immediately.
+func SleepToMaintainInterval(startTime time.Time, iterationInterval time.Duration, sigChan chan os.Signal) {
+	// Calculate the next expected start time
+	nextExpectedStartTime := startTime.Add(iterationInterval)
+	currentTime := time.Now()
 
-	// Determine if sleep is needed to maintain the iteration interval.
-	if elapsedTime < iterationInterval {
-		sleepDuration := iterationInterval - elapsedTime
-		logrus.Debugf("Iteration completed. Sleeping for %v until next iteration.", sleepDuration)
-		time.Sleep(sleepDuration) // Sleep to maintain the configured iteration interval.
+	// Calculate the remaining time to wait, if any
+	sleepDuration := nextExpectedStartTime.Sub(currentTime)
+
+	if sleepDuration > 0 {
+		log.Printf("Iteration completed early. Waiting for %v until next iteration or a signal to proceed immediately.", sleepDuration)
+
+		// Create a Timer instead of using time.After
+		timer := time.NewTimer(sleepDuration)
+
+		select {
+		case <-timer.C:
+			// The wait time has passed, proceed with the next iteration
+			log.Println("Wait time elapsed. Proceeding with the next iteration.")
+		case <-sigChan:
+			// Signal received, force an immediate iteration
+			if !timer.Stop() {
+				<-timer.C // Drain the timer channel if necessary
+			}
+			log.Println("Received signal to proceed immediately. Skipping wait.")
+		}
 	} else {
-		logrus.Debugf("Iteration took longer than the interval. Starting next iteration immediately.")
+		log.Printf("Iteration took longer than the interval. Starting next iteration immediately.")
 	}
 
-	// Return the elapsed time for potential further use.
-	return elapsedTime
+	// Log the final timing for this iteration
+	totalElapsedTime := time.Since(startTime)
+	log.Printf("Total time elapsed for this iteration including wait time: %v", totalElapsedTime)
 }
 
 // initializeAndStartHeartbeat initializes the ApplicationHeartbeat and starts the health check routine.

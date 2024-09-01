@@ -40,3 +40,6 @@ node_modules/
 # Ignore Go module files
 go.mod
 go.sum
+
+# binaries
+bin/
