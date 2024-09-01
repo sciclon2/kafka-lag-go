@@ -20,6 +20,14 @@ trap cleanup EXIT
 echo "Starting infrastructure..."
 docker-compose -f test/e2e/setup/docker-compose.yml up -d
 
+# Ensure go.mod exists with correct Go version
+echo "Checking go.mod..."
+if [ ! -f go.mod ]; then
+    go mod init github.com/sciclon2/kafka-lag-go
+    go mod edit -go=1.20  # Set the Go version here
+fi
+go mod tidy
+
 # Run the main application in the background
 echo "Starting kafka-lag-go application..."
 go build -o bin/kafka-lag-go cmd/kafka-lag-go/main.go
