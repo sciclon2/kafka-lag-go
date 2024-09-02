@@ -7,10 +7,12 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/IBM/sarama"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sciclon2/kafka-lag-go/pkg/config"
+	"github.com/sciclon2/kafka-lag-go/pkg/heartbeat"
 	"github.com/sciclon2/kafka-lag-go/pkg/kafka"
 	"github.com/sciclon2/kafka-lag-go/pkg/storage"
 	"github.com/sirupsen/logrus"
@@ -61,14 +63,15 @@ func InitializeMetricsServer(cfg *config.Config) {
 	}()
 }
 
-// GetConfigFilePath retrieves the configuration file path.
-func GetConfigFilePath() string {
-	// Logic to get the configuration file path.
-	return config.GetConfigFilePath()
-}
-
 func InitializeSignalHandling() chan os.Signal {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGUSR1)
 	return sigChan
+}
+
+// initializeAndStartHeartbeat initializes the ApplicationHeartbeat and starts the health check routine.
+func InitializeAndStartHeartbeat(kafkaAdmin kafka.KafkaAdmin, store storage.Storage, interval time.Duration, cfg *config.Config) *heartbeat.ApplicationHeartbeat {
+	applicationHeartbeat := heartbeat.NewApplicationHeartbeat(kafkaAdmin, store, interval, cfg.App.HealthCheckPort, cfg.App.HealthCheckPath)
+	applicationHeartbeat.Start()
+	return applicationHeartbeat
 }

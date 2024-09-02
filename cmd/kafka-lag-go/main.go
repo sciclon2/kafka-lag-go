@@ -5,13 +5,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/sciclon2/kafka-lag-go/pkg/config"
 	maininit "github.com/sciclon2/kafka-lag-go/pkg/init"
 
-	"github.com/sciclon2/kafka-lag-go/pkg/heartbeat"
 	"github.com/sciclon2/kafka-lag-go/pkg/kafka"
 	"github.com/sciclon2/kafka-lag-go/pkg/metrics"
-	"github.com/sciclon2/kafka-lag-go/pkg/storage"
 	"github.com/sciclon2/kafka-lag-go/pkg/structs"
 
 	_ "net/http/pprof"
@@ -53,7 +50,7 @@ func main() {
 	defer store.GracefulStop()
 
 	// Initialize and start the ApplicationHeartbeat
-	initializeAndStartHeartbeat(admin, store, heartbeatInterval*time.Second, cfg)
+	maininit.InitializeAndStartHeartbeat(admin, store, heartbeatInterval*time.Second, cfg)
 
 	// Generate a unique ID for this node.
 	nodeID := generateNodeID()
@@ -171,11 +168,4 @@ func SleepToMaintainInterval(startTime time.Time, iterationInterval time.Duratio
 	// Log the final timing for this iteration
 	totalElapsedTime := time.Since(startTime)
 	log.Printf("Total time elapsed for this iteration including wait time: %v", totalElapsedTime)
-}
-
-// initializeAndStartHeartbeat initializes the ApplicationHeartbeat and starts the health check routine.
-func initializeAndStartHeartbeat(kafkaAdmin kafka.KafkaAdmin, store storage.Storage, interval time.Duration, cfg *config.Config) *heartbeat.ApplicationHeartbeat {
-	applicationHeartbeat := heartbeat.NewApplicationHeartbeat(kafkaAdmin, store, interval, cfg.App.HealthCheckPort, cfg.App.HealthCheckPath)
-	applicationHeartbeat.Start()
-	return applicationHeartbeat
 }
