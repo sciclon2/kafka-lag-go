@@ -41,6 +41,6 @@ sleep 2
 
 # Run the end-to-end tests
 echo "Running end-to-end tests..."
-go test -v -tags=e2e ./test/e2e/...
+RUN_E2E_TESTS=true go test -v ./test/e2e/...
 
 # The cleanup function will be called automatically when the script exits

@@ -1,11 +1,11 @@
 package maininit
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 
 	"github.com/IBM/sarama"
@@ -47,9 +47,17 @@ func InitializeStorage(cfg *config.Config) storage.Storage {
 }
 
 func InitializeMetricsServer(cfg *config.Config) {
-	http.Handle("/metrics", promhttp.Handler())
+	// Create a new ServeMux for metrics
+	metricsMux := http.NewServeMux()
+	metricsMux.Handle("/metrics", promhttp.Handler())
+
+	// Start the Prometheus metrics server
 	go func() {
-		logrus.Fatal(http.ListenAndServe(":"+strconv.Itoa(cfg.Prometheus.MetricsPort), nil))
+		address := fmt.Sprintf(":%d", cfg.Prometheus.MetricsPort)
+		logrus.Infof("Starting Prometheus metrics server on port %d", cfg.Prometheus.MetricsPort)
+		if err := http.ListenAndServe(address, metricsMux); err != nil {
+			logrus.Fatalf("Failed to start Prometheus metrics server: %v", err)
+		}
 	}()
 }
 

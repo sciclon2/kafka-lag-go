@@ -35,40 +35,37 @@ func NewApplicationHeartbeat(kafkaAdmin kafka.KafkaAdmin, store storage.Storage,
 	}
 }
 func (ah *ApplicationHeartbeat) Start() {
-	// Register the health check handler with the configured path
-	http.HandleFunc(ah.HealthCheckPath, ah.HealthCheckHandler)
+	// Create a new ServeMux for health checks
+	healthMux := http.NewServeMux()
+	healthMux.HandleFunc(ah.HealthCheckPath, ah.HealthCheckHandler)
 
 	// Start the HTTP server for health checks on the configured port in a separate goroutine
 	go func() {
 		address := fmt.Sprintf(":%d", ah.HealthCheckPort)
 		logrus.Infof("Starting health check server on port %d with path %s", ah.HealthCheckPort, ah.HealthCheckPath)
-		if err := http.ListenAndServe(address, nil); err != nil {
+		if err := http.ListenAndServe(address, healthMux); err != nil {
 			logrus.Fatalf("Failed to start health check server: %v", err)
 		}
 	}()
 
+	// Heartbeat check logic (unchanged)
 	go func() {
 		for {
-			// Create a custom context with a timeout for the Redis check
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 
-			// Perform health checks for Kafka and Redis
 			healthy := ah.checkKafka() && ah.checkRedis(ctx)
 
-			// Update the status
 			ah.StatusLock.Lock()
 			ah.Status = healthy
 			ah.StatusLock.Unlock()
 
-			// Log the result of the health check
 			if healthy {
 				logrus.Debugf("Application heartbeat check passed")
 			} else {
 				logrus.Warn("Application heartbeat check failed")
 			}
 
-			// Wait for the next check
 			time.Sleep(ah.Interval)
 		}
 	}()

@@ -27,10 +27,9 @@ func TestHealthEndpoint(t *testing.T) {
 
 func TestMetricsEndpoint(t *testing.T) {
 	// Wait for the application to be up and running
-	time.Sleep(5 * time.Second)
+	time.Sleep(3 * time.Second)
 
-	resp, err := http.Get("http://localhost:8080/metrics")
+	resp, err := http.Get("http://localhost:9090/metrics")
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	time.Sleep(17 * time.Second)
 }
