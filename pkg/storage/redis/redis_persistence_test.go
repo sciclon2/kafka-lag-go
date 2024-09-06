@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"sort"
 	"testing"
 
 	"github.com/redis/go-redis/v9"
@@ -239,6 +240,10 @@ func TestPersistLatestProducedOffsetsMultipleClusters(t *testing.T) {
 		processedGroups = append(processedGroups, group)
 	}
 
+	// Sort the processedGroups by Name before making assertions as  channel output will not be ordered
+	sort.Slice(processedGroups, func(i, j int) bool {
+		return processedGroups[i].Name < processedGroups[j].Name
+	})
 	// Verify that both groups were processed
 	assert.Len(t, processedGroups, 2)
 
