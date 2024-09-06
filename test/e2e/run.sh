@@ -31,7 +31,7 @@ go mod tidy
 # Run the main application in the background
 echo "Starting kafka-lag-go application..."
 go build -o bin/kafka-lag-go cmd/kafka-lag-go/main.go
-./bin/kafka-lag-go --config-file configs/config.yaml &
+./bin/kafka-lag-go --config-file test/e2e/config.yaml &
 
 # Capture the PID of the application
 APP_PID=$!

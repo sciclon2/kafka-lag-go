@@ -36,8 +36,8 @@ func (lp *LagProcessor) processGroup(group *structs.Group) {
 	// Set the group's sum values
 	lp.updateGroupSums(group, tempSumLagInOffsets, tempSumLagInSeconds, validOffsetsFound, validSecondsFound)
 
-	logrus.Infof("Finished processing group: %s, MaxLagInOffsets: %d, MaxLagInSeconds: %d, SumLagInOffsets: %d, SumLagInSeconds: %d",
-		group.Name, group.MaxLagInOffsets, group.MaxLagInSeconds, group.SumLagInOffsets, group.SumLagInSeconds)
+	logrus.Infof("Finished processing group: %s in cluster: %s, MaxLagInOffsets: %d, MaxLagInSeconds: %d, SumLagInOffsets: %d, SumLagInSeconds: %d",
+		group.Name, group.ClusterName, group.MaxLagInOffsets, group.MaxLagInSeconds, group.SumLagInOffsets, group.SumLagInSeconds)
 }
 
 func (lp *LagProcessor) processTopic(topic *structs.Topic, group *structs.Group, tempSumLagInOffsets, tempSumLagInSeconds *int64, validOffsetsFound, validSecondsFound *bool) {
