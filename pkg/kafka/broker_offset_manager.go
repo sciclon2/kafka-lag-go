@@ -10,8 +10,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func GetLatestProducedOffsets(admin KafkaAdmin, groupStructPartialChan <-chan *structs.Group, groupStructCompleteChan chan<- *structs.Group, numWorkers int, config *sarama.Config) {
+func GetLatestProducedOffsets(groupsWithLeaderInfoChan <-chan *structs.Group, numWorkers int) <-chan *structs.Group {
 	var wg sync.WaitGroup
+	groupsWithLeaderInfoAndLeaderOffsetsChan := make(chan *structs.Group)
 
 	// Start multiple workers to process group offsets concurrently
 	wg.Add(numWorkers)
@@ -19,9 +20,9 @@ func GetLatestProducedOffsets(admin KafkaAdmin, groupStructPartialChan <-chan *s
 		go func() {
 			defer wg.Done()
 
-			for group := range groupStructPartialChan {
-				processGroupOffsets(group, config, numWorkers)
-				groupStructCompleteChan <- group
+			for group := range groupsWithLeaderInfoChan {
+				processGroupOffsets(group, numWorkers)
+				groupsWithLeaderInfoAndLeaderOffsetsChan <- group
 			}
 		}()
 	}
@@ -29,11 +30,13 @@ func GetLatestProducedOffsets(admin KafkaAdmin, groupStructPartialChan <-chan *s
 	// Wait for all workers to finish and then close the channel
 	go func() {
 		wg.Wait()
-		close(groupStructCompleteChan)
+		close(groupsWithLeaderInfoAndLeaderOffsetsChan)
 	}()
+	return groupsWithLeaderInfoAndLeaderOffsetsChan
 }
 
-func processGroupOffsets(group *structs.Group, config *sarama.Config, numWorkers int) {
+func processGroupOffsets(group *structs.Group, numWorkers int) {
+	// Group partitions by their leader broker
 	brokerPartitionMap := groupPartitionsByBroker(group)
 
 	var wg sync.WaitGroup
@@ -43,13 +46,14 @@ func processGroupOffsets(group *structs.Group, config *sarama.Config, numWorkers
 	for broker, topicPartitions := range brokerPartitionMap {
 		sem <- struct{}{} // Acquire a slot in the semaphore
 		wg.Add(1)
-		go func(broker structs.BrokerInterface, topicPartitions map[string][]structs.Partition) {
+		go func(broker *sarama.Broker, topicPartitions map[string][]structs.Partition) {
 			defer wg.Done()
 			defer func() { <-sem }() // Release the slot in the semaphore
 
-			offsets, err := fetchLatestProducedOffsetsFromBroker(broker, topicPartitions, config)
+			// Fetch offsets using the saramaConfig from the group struct
+			offsets, err := fetchLatestProducedOffsetsFromBroker(broker, topicPartitions, group.SaramaConfig)
 			if err != nil {
-				logrus.Warnf("Error fetching offsets from broker %s: %v", broker.Addr(), err)
+				logrus.Warnf("Error fetching produced offsets from broker %s: %v", broker.Addr(), err)
 				return
 			}
 
@@ -85,16 +89,18 @@ func processGroupOffsets(group *structs.Group, config *sarama.Config, numWorkers
 	}
 }
 
-func groupPartitionsByBroker(group *structs.Group) map[structs.BrokerInterface]map[string][]structs.Partition {
-	brokerPartitionMap := make(map[structs.BrokerInterface]map[string][]structs.Partition)
+func groupPartitionsByBroker(group *structs.Group) map[*sarama.Broker]map[string][]structs.Partition {
+	brokerPartitionMap := make(map[*sarama.Broker]map[string][]structs.Partition)
 
 	for _, topic := range group.Topics {
 		for _, partition := range topic.Partitions {
 			if partition.LeaderBroker != nil {
-				if brokerPartitionMap[partition.LeaderBroker] == nil {
-					brokerPartitionMap[partition.LeaderBroker] = make(map[string][]structs.Partition)
+				leaderBroker := partition.LeaderBroker // Directly use the *sarama.Broker
+
+				if brokerPartitionMap[leaderBroker] == nil {
+					brokerPartitionMap[leaderBroker] = make(map[string][]structs.Partition)
 				}
-				brokerPartitionMap[partition.LeaderBroker][topic.Name] = append(brokerPartitionMap[partition.LeaderBroker][topic.Name], partition)
+				brokerPartitionMap[leaderBroker][topic.Name] = append(brokerPartitionMap[leaderBroker][topic.Name], partition)
 			}
 		}
 	}
@@ -103,7 +109,7 @@ func groupPartitionsByBroker(group *structs.Group) map[structs.BrokerInterface]m
 }
 
 // Function to process the OffsetResponse and extract offsets into a structured map
-func fetchLatestProducedOffsetsFromBroker(broker structs.BrokerInterface, topicPartitions map[string][]structs.Partition, config *sarama.Config) (map[string]map[int32]int64, error) { // Use BrokerInterface
+func fetchLatestProducedOffsetsFromBroker(broker *sarama.Broker, topicPartitions map[string][]structs.Partition, config *sarama.Config) (map[string]map[int32]int64, error) {
 	offsetResponse, err := getOffsetResponseFromBroker(broker, topicPartitions, config)
 	if err != nil {
 		return nil, err
@@ -113,10 +119,16 @@ func fetchLatestProducedOffsetsFromBroker(broker structs.BrokerInterface, topicP
 	for topic, partitions := range topicPartitions {
 		for _, partition := range partitions {
 			if block := offsetResponse.GetBlock(topic, partition.Number); block != nil && block.Err == sarama.ErrNoError {
-				if offsets[topic] == nil {
-					offsets[topic] = make(map[int32]int64)
+				// Check if there are any offsets before accessing the slice
+				if len(block.Offsets) > 0 {
+					if offsets[topic] == nil {
+						offsets[topic] = make(map[int32]int64)
+					}
+					offsets[topic][partition.Number] = block.Offsets[0]
+				} else {
+					// Handle the case where no offsets are available
+					logrus.Warnf("No offsets available for topic %s partition %d from broker %s", topic, partition.Number, broker.Addr())
 				}
-				offsets[topic][partition.Number] = block.Offsets[0]
 			}
 		}
 	}
@@ -124,7 +136,7 @@ func fetchLatestProducedOffsetsFromBroker(broker structs.BrokerInterface, topicP
 }
 
 // Function to build and send the OffsetRequest to the broker, and fetch the OffsetResponse
-func getOffsetResponseFromBroker(broker structs.BrokerInterface, topicPartitions map[string][]structs.Partition, config *sarama.Config) (*sarama.OffsetResponse, error) {
+func getOffsetResponseFromBroker(broker *sarama.Broker, topicPartitions map[string][]structs.Partition, config *sarama.Config) (*sarama.OffsetResponse, error) {
 	offsetRequest := &sarama.OffsetRequest{}
 	for topic, partitions := range topicPartitions {
 		for _, partition := range partitions {
@@ -138,14 +150,14 @@ func getOffsetResponseFromBroker(broker structs.BrokerInterface, topicPartitions
 
 	offsetResponse, err := broker.GetAvailableOffsets(offsetRequest)
 	if err != nil {
-		return nil, fmt.Errorf("error fetching offsets from broker %s: %w", broker.Addr(), err)
+		return nil, fmt.Errorf("error fetching produced offsets from broker %s: %w", broker.Addr(), err)
 	}
 
-	logrus.Debugf("OffsetResponse from broker %s: %+v\n", broker.Addr(), offsetResponse)
+	logrus.Debugf("Latest Produced OffsetResponse from broker %s: %+v\n", broker.Addr(), offsetResponse)
 	return offsetResponse, nil
 }
 
-func ensureBrokerConnection(broker structs.BrokerInterface, config *sarama.Config) error {
+func ensureBrokerConnection(broker *sarama.Broker, config *sarama.Config) error {
 	connected, err := broker.Connected()
 	if err != nil {
 		return fmt.Errorf("error checking broker connection state: %w", err)
@@ -156,33 +168,4 @@ func ensureBrokerConnection(broker structs.BrokerInterface, config *sarama.Confi
 		}
 	}
 	return nil
-}
-
-// getTopicPartitionLeaders retrieves the leader brokers for each partition of the specified topics
-// in a Kafka consumer group. It does this by describing the topics and mapping each partition's leader
-// to the corresponding broker.
-func getTopicPartitionLeaders(admin KafkaAdmin, client KafkaClient, topics []structs.Topic) (map[int32]structs.BrokerInterface, error) {
-	brokerMap := make(map[int32]structs.BrokerInterface)
-	for _, broker := range client.Brokers() {
-		brokerMap[broker.ID()] = broker
-	}
-
-	leaderMap := make(map[int32]structs.BrokerInterface)
-	topicNames := make([]string, len(topics))
-	for i, topic := range topics {
-		topicNames[i] = topic.Name
-	}
-
-	topicMetadata, err := admin.DescribeTopics(topicNames)
-	if err != nil {
-		return nil, fmt.Errorf("error describing topics: %v", err)
-	}
-
-	for _, topic := range topicMetadata {
-		for _, partition := range topic.Partitions {
-			leaderMap[partition.ID] = brokerMap[partition.Leader]
-		}
-	}
-
-	return leaderMap, nil
 }

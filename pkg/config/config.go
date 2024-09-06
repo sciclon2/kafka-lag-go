@@ -23,28 +23,8 @@ type Config struct {
 		MetricsPort int               `yaml:"metrics_port"`
 		Labels      map[string]string `yaml:"labels,omitempty"`
 	} `yaml:"prometheus"`
-	Kafka struct {
-		Brokers              []string `yaml:"brokers"`
-		ClientRequestTimeout string   `yaml:"client_request_timeout"` // Timeout for Kafka client requests
-		MetadataFetchTimeout string   `yaml:"metadata_fetch_timeout"` // Timeout for fetching metadata
-		ConsumerGroups       struct {
-			Whitelist *regexp.Regexp `yaml:"whitelist"`
-			Blacklist *regexp.Regexp `yaml:"blacklist"`
-		} `yaml:"consumer_groups"`
-		SSL struct {
-			Enabled               bool   `yaml:"enabled"`
-			ClientCertificateFile string `yaml:"client_certificate_file"`
-			ClientKeyFile         string `yaml:"client_key_file"`
-			InsecureSkipVerify    bool   `yaml:"insecure_skip_verify"`
-		} `yaml:"ssl"`
-		SASL struct {
-			Enabled   bool   `yaml:"enabled"`
-			Mechanism string `yaml:"mechanism"`
-			User      string `yaml:"user"`
-			Password  string `yaml:"password"`
-		} `yaml:"sasl"`
-	} `yaml:"kafka"`
-	Storage struct {
+	KafkaClusters []KafkaCluster `yaml:"kafka_clusters"`
+	Storage       struct {
 		Type  string `yaml:"type"` // e.g., "redis", "mysql" (for future use)
 		Redis struct {
 			Address              string `yaml:"address"`
@@ -55,13 +35,45 @@ type Config struct {
 		} `yaml:"redis"`
 	} `yaml:"storage"`
 	App struct {
-		ClusterName       string `yaml:"cluster_name"`
 		IterationInterval string `yaml:"iteration_interval"`
 		NumWorkers        int    `yaml:"num_workers"`
 		LogLevel          string `yaml:"log_level"`
 		HealthCheckPort   int    `yaml:"health_check_port"`
 		HealthCheckPath   string `yaml:"health_check_path"`
 	} `yaml:"app"`
+}
+
+// KafkaCluster represents the configuration for a single Kafka cluster
+type KafkaCluster struct {
+	Name                 string         `yaml:"name"`
+	Brokers              []string       `yaml:"brokers"`
+	ClientRequestTimeout string         `yaml:"client_request_timeout"`
+	MetadataFetchTimeout string         `yaml:"metadata_fetch_timeout"`
+	ConsumerGroups       ConsumerGroups `yaml:"consumer_groups"`
+	SSL                  SSLConfig      `yaml:"ssl"`
+	SASL                 SASLConfig     `yaml:"sasl"`
+}
+
+// ConsumerGroups represents the consumer group settings
+type ConsumerGroups struct {
+	Whitelist *regexp.Regexp `yaml:"whitelist"`
+	Blacklist *regexp.Regexp `yaml:"blacklist"`
+}
+
+// SSLConfig represents the SSL settings for Kafka
+type SSLConfig struct {
+	Enabled               bool   `yaml:"enabled"`
+	ClientCertificateFile string `yaml:"client_certificate_file"`
+	ClientKeyFile         string `yaml:"client_key_file"`
+	InsecureSkipVerify    bool   `yaml:"insecure_skip_verify"`
+}
+
+// SASLConfig represents the SASL settings for Kafka
+type SASLConfig struct {
+	Enabled   bool   `yaml:"enabled"`
+	Mechanism string `yaml:"mechanism"`
+	User      string `yaml:"user"`
+	Password  string `yaml:"password"`
 }
 
 // GetConfigFilePath returns the path to the configuration file
@@ -118,23 +130,25 @@ func LoadConfig(filePath string) (*Config, error) {
 	return &config, nil
 }
 
-// compileRegexPatterns compiles the regex patterns in the config
 func compileRegexPatterns(config *Config) error {
 	var err error
 
-	// Compile whitelist pattern if it is not nil
-	if config.Kafka.ConsumerGroups.Whitelist != nil {
-		config.Kafka.ConsumerGroups.Whitelist, err = regexp.Compile(config.Kafka.ConsumerGroups.Whitelist.String())
-		if err != nil {
-			return fmt.Errorf("invalid consumer group whitelist regex pattern: %w", err)
+	// Iterate over each Kafka cluster
+	for _, cluster := range config.KafkaClusters {
+		// Compile whitelist pattern if it is not nil
+		if cluster.ConsumerGroups.Whitelist != nil {
+			cluster.ConsumerGroups.Whitelist, err = regexp.Compile(cluster.ConsumerGroups.Whitelist.String())
+			if err != nil {
+				return fmt.Errorf("kafka cluster '%s' has an invalid consumer group whitelist regex pattern: %w", cluster.Name, err)
+			}
 		}
-	}
 
-	// Compile blacklist pattern if it is not nil
-	if config.Kafka.ConsumerGroups.Blacklist != nil {
-		config.Kafka.ConsumerGroups.Blacklist, err = regexp.Compile(config.Kafka.ConsumerGroups.Blacklist.String())
-		if err != nil {
-			return fmt.Errorf("invalid consumer group blacklist regex pattern: %w", err)
+		// Compile blacklist pattern if it is not nil
+		if cluster.ConsumerGroups.Blacklist != nil {
+			cluster.ConsumerGroups.Blacklist, err = regexp.Compile(cluster.ConsumerGroups.Blacklist.String())
+			if err != nil {
+				return fmt.Errorf("kafka cluster '%s' has an invalid consumer group blacklist regex pattern: %w", cluster.Name, err)
+			}
 		}
 	}
 
@@ -179,43 +193,39 @@ func setDefaults(config *Config) {
 	if config.App.HealthCheckPath == "" {
 		config.App.HealthCheckPath = "/healthz"
 	}
-	if config.Kafka.ClientRequestTimeout == "" {
-		config.Kafka.ClientRequestTimeout = "30s"
-	}
-	if config.Kafka.MetadataFetchTimeout == "" {
-		config.Kafka.MetadataFetchTimeout = "5s"
-	}
-	// Handle consumer group regex patterns
-	if config.Kafka.ConsumerGroups.Whitelist != nil && config.Kafka.ConsumerGroups.Whitelist.String() == "" {
-		config.Kafka.ConsumerGroups.Whitelist = nil
-	}
-	if config.Kafka.ConsumerGroups.Blacklist != nil && config.Kafka.ConsumerGroups.Blacklist.String() == "" {
-		config.Kafka.ConsumerGroups.Blacklist = nil
-	}
-
-	// Ensure SSL is enabled before considering InsecureSkipVerify
-	if config.Kafka.SSL.Enabled {
-		// If InsecureSkipVerify is not explicitly set, default it to true
-		if !config.Kafka.SSL.InsecureSkipVerify {
-			config.Kafka.SSL.InsecureSkipVerify = true
+	// Set defaults for each Kafka cluster
+	for i := range config.KafkaClusters {
+		cluster := &config.KafkaClusters[i]
+		if cluster.ClientRequestTimeout == "" {
+			cluster.ClientRequestTimeout = "30s"
+		}
+		if cluster.MetadataFetchTimeout == "" {
+			cluster.MetadataFetchTimeout = "5s"
+		}
+		// Handle consumer group regex patterns
+		if cluster.ConsumerGroups.Whitelist != nil && cluster.ConsumerGroups.Whitelist.String() == "" {
+			cluster.ConsumerGroups.Whitelist = nil
+		}
+		if cluster.ConsumerGroups.Blacklist != nil && cluster.ConsumerGroups.Blacklist.String() == "" {
+			cluster.ConsumerGroups.Blacklist = nil
+		}
+		// Ensure SSL is enabled before considering InsecureSkipVerify
+		if cluster.SSL.Enabled && !cluster.SSL.InsecureSkipVerify {
+			cluster.SSL.InsecureSkipVerify = true
 		}
 	}
+	// Set defaults for Prometheus metrics
 	if config.Prometheus.MetricsPort == 0 {
 		config.Prometheus.MetricsPort = 9090 // Default Prometheus metrics port
 	}
 	if config.Prometheus.Labels == nil {
 		config.Prometheus.Labels = make(map[string]string)
 	}
-	// Add the clusterName to the labels
-	config.Prometheus.Labels["cluster_name"] = config.App.ClusterName
 
 }
 
 // validateConfig checks the configuration values for sanity
 func validateConfig(config *Config) error {
-	if config.App.ClusterName == "" {
-		return errors.New("cluster_name is required and cannot be empty")
-	}
 
 	// Validate the iteration interval
 	iterationInterval, err := time.ParseDuration(config.App.IterationInterval)
@@ -250,21 +260,22 @@ func validateConfig(config *Config) error {
 		return fmt.Errorf("unsupported storage type: %s", config.Storage.Type)
 	}
 
-	// Validate SASL configuration
-	if config.Kafka.SASL.Enabled {
-		if config.Kafka.SASL.Mechanism != "SCRAM-SHA-256" && config.Kafka.SASL.Mechanism != "SCRAM-SHA-512" {
-			return errors.New("invalid SASL mechanism; must be SCRAM-SHA-256 or SCRAM-SHA-512")
+	// Validate each Kafka cluster configuration
+	for _, cluster := range config.KafkaClusters {
+		if len(cluster.Brokers) == 0 {
+			return fmt.Errorf("kafka cluster '%s' must have at least one broker", cluster.Name)
 		}
-		if config.Kafka.SASL.User == "" || config.Kafka.SASL.Password == "" {
-			return errors.New("sasl configuration is enabled but missing user or password")
-		}
-	}
-	if config.Prometheus.Labels != nil {
-		for key, value := range config.Prometheus.Labels {
-			if key == "" || value == "" {
-				return errors.New("prometheus labels keys and values must be non-empty strings")
+
+		// Validate SASL configuration if enabled
+		if cluster.SASL.Enabled {
+			if cluster.SASL.Mechanism != "SCRAM-SHA-256" && cluster.SASL.Mechanism != "SCRAM-SHA-512" {
+				return fmt.Errorf("kafka cluster '%s' has invalid SASL mechanism; must be SCRAM-SHA-256 or SCRAM-SHA-512", cluster.Name)
+			}
+			if cluster.SASL.User == "" || cluster.SASL.Password == "" {
+				return fmt.Errorf("kafka cluster '%s' has SASL enabled but missing user or password", cluster.Name)
 			}
 		}
+
 	}
 
 	// Set the default log level in logrus
@@ -295,4 +306,14 @@ func (c *Config) SetLogLevel() {
 		level = logrus.InfoLevel
 	}
 	logrus.SetLevel(level)
+}
+
+// GetClusterConfig returns the KafkaCluster configuration for the given cluster name
+func (c *Config) GetClusterConfig(clusterName string) (*KafkaCluster, error) {
+	for _, cluster := range c.KafkaClusters {
+		if cluster.Name == clusterName {
+			return &cluster, nil
+		}
+	}
+	return nil, fmt.Errorf("cluster %s not found in configuration", clusterName)
 }

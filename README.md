@@ -1,8 +1,8 @@
 # Kafka Lag Go
 
-Kafka Lag Calculator is a lightweight, stateless application designed to calculate Kafka consumer group lag in both offsets and seconds. It efficiently processes Kafka consumer group data using a pipeline pattern implemented with Go’s goroutines and channels, ensuring high performance and scalability. The application employs consistent hashing to distribute work evenly among multiple nodes, making it suitable for deployment in distributed environments.
+Kafka Lag Go is a lightweight, stateless application designed to calculate Kafka consumer group lag in both offsets and seconds. It efficiently processes Kafka consumer group data using a pipeline pattern implemented with Go’s goroutines and channels, ensuring high performance and scalability. The application employs consistent hashing to distribute work evenly among multiple nodes, making it suitable for deployment in distributed environments.
 
-The method for estimating lag in seconds used by Kafka Lag Calculator is inspired by the implementation found in the [Kafka Lag Exporter](https://github.com/seglo/kafka-lag-exporter) project, which is currently in maintenance mode. Kafka Lag Calculator uses both interpolation and extrapolation techniques to approximate the lag in seconds for each partition within a Kafka consumer group.
+The method for estimating lag in seconds used by Kafka Lag Go is inspired by the implementation found in the [Kafka Lag Exporter](https://github.com/seglo/kafka-lag-exporter) project, which is currently archived. Kafka Lag Go uses both interpolation and extrapolation techniques to approximate the lag in seconds for each partition within a Kafka consumer group.
 
 This strategy provides a reasonable estimate of the time delay between message production and consumption, even in cases where the offset data is sparse or not evenly distributed. However, it is important to note that this is an approximation and not an exact measure, making it useful for gaining insights into lag trends rather than precise calculations.
 
@@ -12,6 +12,7 @@ This strategy provides a reasonable estimate of the time delay between message p
 - Time Lag Calculation: Calculates the lag in seconds, offering insight into the time delay between message production and consumption.
 - Max Lag Calculation: Determines the maximum lag in offsets and seconds at both the consumer group and topic levels, providing a clear view of the most delayed parts of your system.
 - Stateless Service: Designed to be stateless, allowing for easy scaling and distribution of work across multiple instances or nodes.
+-	Multi-Cluster Ready: Supports simultaneous monitoring of multiple Kafka clusters, providing flexibility and scalability for complex environments.
 - Consistent Hashing: Uses consistent hashing to split the workload among nodes, ensuring an even distribution of data processing tasks.
 - Docker & Kubernetes Ready: Can be deployed as a Docker container, making it easy to run in Kubernetes or other container orchestration systems, as well as standalone.
 - Pipeline Usage in Redis: The application utilizes Redis pipelines to reduce round trip times and improve overall performance when interacting with Redis. By batching multiple commands together and sending them in a single network request, the application minimizes the overhead of multiple round trips.
@@ -82,27 +83,42 @@ prometheus:
   metrics_port: 9090
   labels:
     env: production
-    service: kafka-lag-calculator
-    
-kafka:
-  brokers:
-    - "broker1:9092"
-    - "broker2:9092"
-  client_request_timeout: "30s"
-  metadata_fetch_timeout: "5s"
-  consumer_groups:
-    whitelist: ".*"
-    blacklist: "test.*"
-  ssl:
-    enabled: true
-    client_certificate_file: "/path/to/cert.pem"
-    client_key_file: "/path/to/key.pem"
-    insecure_skip_verify: true
-  sasl:
-    enabled: true
-    mechanism: "SCRAM-SHA-512"
-    user: "kafkaUser"
-    password: "kafkaPassword"
+    service: kafka-lag-go
+
+kafka_clusters:
+  - name: "kafka-cluster-1"
+    brokers:
+      - "broker1:9092"
+      - "broker2:9092"
+    client_request_timeout: "30s"
+    metadata_fetch_timeout: "5s"
+    consumer_groups:
+      whitelist: ".*"
+      blacklist: "test.*"
+    ssl:
+      enabled: true
+      client_certificate_file: "/path/to/cert.pem"
+      client_key_file: "/path/to/key.pem"
+      insecure_skip_verify: true
+    sasl:
+      enabled: true
+      mechanism: "SCRAM-SHA-512"
+      user: "kafkaUser1"
+      password: "kafkaPassword1"
+
+  - name: "kafka-cluster-2"
+    brokers:
+      - "broker3:9092"
+      - "broker4:9092"
+    client_request_timeout: "40s"
+    metadata_fetch_timeout: "6s"
+    consumer_groups:
+      whitelist: "important.*"
+      blacklist: "test2.*"
+    ssl:
+      enabled: false
+    sasl:
+      enabled: false
 
 storage:
   type: "redis"
@@ -114,7 +130,6 @@ storage:
     retention_ttl_seconds: 7200
 
 app:
-  cluster_name: "kafka-cluster"
   iteration_interval: "30s"
   num_workers: 10
   log_level: "info"
@@ -145,43 +160,63 @@ docker pull sciclon2/kafka-lag-go
 
 The Kafka Lag Monitor requires a YAML configuration file to customize its behavior. Below is a description of the available configuration options:
 
-- `prometheus.metrics_port`: The port on which Prometheus metrics will be exposed.
-- `prometheus.labels`: Additional labels to be attached to the exported metrics.
-- `kafka.brokers`: The list of Kafka broker addresses.
-- `kafka.client_request_timeout`: The timeout for Kafka client requests.
-- `kafka.metadata_fetch_timeout`: The timeout for fetching Kafka metadata.
-- `kafka.consumer_groups.whitelist`: A regular expression to whitelist consumer groups.
-- `kafka.consumer_groups.blacklist`: A regular expression to blacklist consumer groups.
-- `kafka.ssl.enabled`: Whether SSL/TLS is enabled for Kafka connections.
-- `kafka.ssl.client_certificate_file`: The path to the client certificate file for SSL/TLS.
-- `kafka.ssl.client_key_file`: The path to the client key file for SSL/TLS.
-- `kafka.ssl.insecure_skip_verify`: Whether to skip SSL/TLS verification.
-- `kafka.sasl.enabled`: Whether SASL authentication is enabled for Kafka connections.
-- `kafka.sasl.mechanism`: The SASL mechanism to use.
-- `kafka.sasl.user`: The username for SASL authentication.
-- `kafka.sasl.password`: The password for SASL authentication.
-- `storage.type`: The type of storage backend to use.
-- `storage.redis.address`: The address of the Redis server for Redis storage.
-- `storage.redis.port`: The port of the Redis server for Redis storage.
-- `storage.redis.client_request_timeout`: The timeout for Redis client requests.
-- `storage.redis.client_idle_timeout`: The idle timeout for Redis clients.
-- `storage.redis.retention_ttl_seconds`: The time-to-live (TTL) for Redis keys.
-- `app.cluster_name`: The name of the Kafka cluster.
-- `app.iteration_interval`: The interval at which the lag monitor iterates over consumer groups.
-- `app.num_workers`: The number of worker goroutines to use.
-- `app.log_level`: The log level for the lag monitor.
-- `app.health_check_port`: The port on which the health check endpoint will be exposed.
-- `app.health_check_path`: The path of the health check endpoint.
+- **Prometheus Metrics**:
+  - `prometheus.metrics_port`: The port on which Prometheus metrics will be exposed.
+  - `prometheus.labels`: Additional labels to be attached to the exported metrics.
+  
+- **Kafka Clusters**:
+  - `kafka_clusters`: An array of Kafka cluster configurations, each with the following options:
+    - `name`: The name of the Kafka cluster.
+    - `brokers`: The list of Kafka broker addresses.
+    - `client_request_timeout`: The timeout for Kafka client requests.
+    - `metadata_fetch_timeout`: The timeout for fetching Kafka metadata.
+    - `consumer_groups.whitelist`: A regular expression to whitelist consumer groups.
+    - `consumer_groups.blacklist`: A regular expression to blacklist consumer groups.
+    - **SSL Settings**:
+      - `ssl.enabled`: Whether SSL/TLS is enabled for Kafka connections.
+      - `ssl.client_certificate_file`: The path to the client certificate file for SSL/TLS.
+      - `ssl.client_key_file`: The path to the client key file for SSL/TLS.
+      - `ssl.insecure_skip_verify`: Whether to skip SSL/TLS verification.
+    - **SASL Settings**:
+      - `sasl.enabled`: Whether SASL authentication is enabled for Kafka connections.
+      - `sasl.mechanism`: The SASL mechanism to use (`SCRAM-SHA-256` or `SCRAM-SHA-512`).
+      - `sasl.user`: The username for SASL authentication.
+      - `sasl.password`: The password for SASL authentication.
+
+- **Storage Configuration**:
+  - `storage.type`: The type of storage backend to use (e.g., `redis`).
+  - `storage.redis.address`: The address of the Redis server for Redis storage.
+  - `storage.redis.port`: The port of the Redis server for Redis storage.
+  - `storage.redis.client_request_timeout`: The timeout for Redis client requests.
+  - `storage.redis.client_idle_timeout`: The idle timeout for Redis clients.
+  - `storage.redis.retention_ttl_seconds`: The time-to-live (TTL) for Redis keys.
+
+- **Application Settings**:
+  - `app.iteration_interval`: The interval at which the lag monitor iterates over consumer groups.
+  - `app.num_workers`: The number of worker goroutines to use.
+  - `app.log_level`: The log level for the lag monitor (`info`, `debug`, etc.).
+  - `app.health_check_port`: The port on which the health check endpoint will be exposed.
+  - `app.health_check_path`: The path of the health check endpoint.
 
 Please refer to the `config.go` file for more details on each configuration option.
 
 
 
-## Health Check
+## Health Check Feature
 
-The health check feature in Kafka Lag Monitor monitors the accessibility of both Kafka and Redis. It ensures that the application can successfully connect to and interact with these components. By periodically checking the health of Kafka and Redis, the health check feature provides insights into the overall availability and reliability of the system.
+Kafka Lag Go includes a built-in health check system that continuously monitors the health of Kafka clusters and Redis. It ensures that the application can connect to these components and that they are functioning properly.
 
-The health check endpoint is exposed on the specified port (`app.health_check_port`) and path (`app.health_check_path`) in the configuration file. By accessing this endpoint, you can obtain information about the health status of Kafka Lag Monitor.
+### What to Expect:
+
+- The health check monitors both Kafka and Redis.
+- If at least one Kafka cluster and Redis are running smoothly, the system is considered healthy.
+- The health status is accessible through a dedicated HTTP endpoint, providing real-time information on system health.
+- The endpoint will always return a `200 OK` status, with details on the system’s health in the response body:
+  - `status`: "OK" if everything is functioning well, or "Unhealthy" if there’s an issue.
+  - `unhealthy_clusters`: A list of Kafka clusters that are not performing correctly.
+- The health check runs at regular intervals, ensuring up-to-date status information.
+
+This feature allows you to easily monitor the health of your Kafka and Redis components and react promptly to any issues.
 
 
 ## Prometheus Metrics
@@ -190,19 +225,18 @@ This application exposes a comprehensive set of Prometheus metrics that provide 
 
 ### Metrics Overview
 
-- `kafka_consumer_group_lag_in_offsets (group, topic, partition)`: The lag in offsets for a specific partition within a Kafka topic for a consumer group. (Type: Gauge)
-- `kafka_consumer_group_lag_in_seconds (group, topic, partition)`: The lag in seconds for a specific partition within a Kafka topic for a consumer group. (Type: Gauge)
-- `kafka_consumer_group_max_lag_in_offsets (group)`: The maximum lag in offsets across all topics and partitions within a Kafka consumer group. (Type: Gauge)
-- `kafka_consumer_group_max_lag_in_seconds (group)`: The maximum lag in seconds across all topics and partitions within a Kafka consumer group. (Type: Gauge)
-- `kafka_consumer_group_topic_max_lag_in_offsets (group, topic)`: The maximum lag in offsets for a specific Kafka topic within a consumer group. (Type: Gauge)
-- `kafka_consumer_group_topic_max_lag_in_seconds (group, topic)`: The maximum lag in seconds for a specific Kafka topic within a consumer group. (Type: Gauge)
-- `kafka_consumer_group_sum_lag_in_offsets (group)`: The sum of lag in offsets across all topics and partitions within a Kafka consumer group. (Type: Gauge)
-- `kafka_consumer_group_sum_lag_in_seconds (group)`: The sum of lag in seconds across all topics and partitions within a Kafka consumer group. (Type: Gauge)
-- `kafka_consumer_group_topic_sum_lag_in_offsets (group, topic)`: The sum of lag in offsets for a specific Kafka topic within a consumer group. (Type: Gauge)
-- `kafka_consumer_group_topic_sum_lag_in_seconds (group, topic)`: The sum of lag in seconds for a specific Kafka topic within a consumer group. (Type: Gauge)
-- `kafka_total_groups_checked`: The total number of Kafka consumer groups checked in each iteration. (Type: Gauge)
-- `kafka_iteration_time_seconds`: The time taken to complete an iteration of checking all Kafka consumer groups. (Type: Gauge)
-
+- **`kafka_consumer_group_lag_in_offsets (group, topic, partition)`**: The lag in offsets for a specific partition within a Kafka topic for a consumer group. *(Type: Gauge)*
+- **`kafka_consumer_group_lag_in_seconds (group, topic, partition)`**: The lag in seconds for a specific partition within a Kafka topic for a consumer group. *(Type: Gauge)*
+- **`kafka_consumer_group_max_lag_in_offsets (group)`**: The maximum lag in offsets across all topics and partitions within a Kafka consumer group. *(Type: Gauge)*
+- **`kafka_consumer_group_max_lag_in_seconds (group)`**: The maximum lag in seconds across all topics and partitions within a Kafka consumer group. *(Type: Gauge)*
+- **`kafka_consumer_group_topic_max_lag_in_offsets (group, topic)`**: The maximum lag in offsets for a specific Kafka topic within a consumer group. *(Type: Gauge)*
+- **`kafka_consumer_group_topic_max_lag_in_seconds (group, topic)`**: The maximum lag in seconds for a specific Kafka topic within a consumer group. *(Type: Gauge)*
+- **`kafka_consumer_group_sum_lag_in_offsets (group)`**: The sum of lag in offsets across all topics and partitions within a Kafka consumer group. *(Type: Gauge)*
+- **`kafka_consumer_group_sum_lag_in_seconds (group)`**: The sum of lag in seconds across all topics and partitions within a Kafka consumer group. *(Type: Gauge)*
+- **`kafka_consumer_group_topic_sum_lag_in_offsets (group, topic)`**: The sum of lag in offsets for a specific Kafka topic within a consumer group. *(Type: Gauge)*
+- **`kafka_consumer_group_topic_sum_lag_in_seconds (group, topic)`**: The sum of lag in seconds for a specific Kafka topic within a consumer group. *(Type: Gauge)*
+- **`kafka_total_groups_checked`**: The total number of Kafka consumer groups checked in each iteration. *(Type: Gauge)*
+- **`kafka_iteration_time_seconds`**: The time taken to complete an iteration of checking all Kafka consumer groups. *(Type: Gauge)*
 
 Once the container is running, Kafka Lag Monitor will expose Prometheus metrics on the port specified in the configuration file (`metrics_port`). You can access the metrics at:
 

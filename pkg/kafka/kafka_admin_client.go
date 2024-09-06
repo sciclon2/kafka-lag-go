@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/sciclon2/kafka-lag-go/pkg/config"
+	"github.com/sciclon2/kafka-lag-go/pkg/structs"
+
 	"github.com/sirupsen/logrus"
 
 	"github.com/IBM/sarama"
@@ -17,43 +19,20 @@ const (
 	kafkaVersion = "2.1.0"
 )
 
-// KafkaClient is an interface that wraps sarama.Client methods.
-type KafkaClient interface {
-	Brokers() []*sarama.Broker
-	Topics() ([]string, error)
-	Partitions(topic string) ([]int32, error)
-	GetOffset(topic string, partition int32, time int64) (int64, error)
-	Leader(topic string, partition int32) (*sarama.Broker, error)
-	Replicas(topic string, partition int32) ([]int32, error)
-	RefreshMetadata(topics ...string) error
-	Close() error
-}
-
-// KafkaAdmin is an interface that wraps sarama.ClusterAdmin methods.
-type KafkaAdmin interface {
-	ListConsumerGroups() (map[string]string, error)
-	DescribeTopics(topics []string) ([]*sarama.TopicMetadata, error)
-	ListConsumerGroupOffsets(group string, topicPartitions map[string][]int32) (*sarama.OffsetFetchResponse, error)
-	ListTopics() (map[string]sarama.TopicDetail, error) // New method to list topics
-	Close() error
-}
-
-func CreateAdminAndClient(cfg *config.Config, saramaConfig *sarama.Config) (KafkaClient, KafkaAdmin, error) {
-	kafkaConfig := cfg.Kafka
-
+func CreateAdminAndClient(cluster config.KafkaCluster, saramaConfig *sarama.Config) (structs.KafkaClient, structs.KafkaAdmin, error) {
 	logrus.Debugf("Setting Kafka version to %s", kafkaVersion)
 	if err := setKafkaVersion(kafkaVersion, saramaConfig); err != nil {
 		return nil, nil, err
 	}
 
 	logrus.Debug("Parsing client request timeout")
-	clientRequestTimeout, err := time.ParseDuration(cfg.Kafka.ClientRequestTimeout)
+	clientRequestTimeout, err := time.ParseDuration(cluster.ClientRequestTimeout)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error parsing ClientRequestTimeout: %w", err)
 	}
 
 	logrus.Debug("Parsing metadata fetch timeout")
-	metadataTimeout, err := time.ParseDuration(cfg.Kafka.MetadataFetchTimeout)
+	metadataTimeout, err := time.ParseDuration(cluster.MetadataFetchTimeout)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error parsing MetadataTimeout: %w", err)
 	}
@@ -61,24 +40,24 @@ func CreateAdminAndClient(cfg *config.Config, saramaConfig *sarama.Config) (Kafk
 	saramaConfig.Net.DialTimeout = clientRequestTimeout
 	saramaConfig.Metadata.Retry.Backoff = metadataTimeout
 
-	if kafkaConfig.SSL.Enabled {
+	if cluster.SSL.Enabled {
 		logrus.Debug("Configuring TLS for Kafka connection")
-		if err := configureTLS(cfg, saramaConfig); err != nil {
+		if err := configureTLS(cluster, saramaConfig); err != nil {
 			return nil, nil, err
 		}
 	}
 
-	if kafkaConfig.SASL.Enabled {
+	if cluster.SASL.Enabled {
 		logrus.Debug("Configuring SASL authentication for Kafka connection")
-		if err := ConfigureSASL(cfg, saramaConfig); err != nil {
+		if err := ConfigureSASL(cluster, saramaConfig); err != nil {
 			return nil, nil, err
 		}
 	}
 
-	logrus.Infof("Creating Kafka client with brokers: %v", cfg.Kafka.Brokers)
-	client, err := sarama.NewClient(cfg.Kafka.Brokers, saramaConfig)
+	logrus.Infof("Creating Kafka client with brokers: %v", cluster.Brokers)
+	client, err := sarama.NewClient(cluster.Brokers, saramaConfig)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error creating Kafka client with brokers %v: %w", cfg.Kafka.Brokers, err)
+		return nil, nil, fmt.Errorf("error creating Kafka client with brokers %v: %w", cluster.Brokers, err)
 	}
 
 	logrus.Debug("Creating Kafka admin client")
@@ -88,8 +67,8 @@ func CreateAdminAndClient(cfg *config.Config, saramaConfig *sarama.Config) (Kafk
 		return nil, nil, fmt.Errorf("error creating Kafka admin client: %w", err)
 	}
 
-	logrus.Info("Kafka client and admin successfully created")
-	return client, admin, nil
+	// Wrap the real sarama client and admin in the custom structs that implement the interfaces.
+	return &structs.SaramaKafkaClient{Client: client}, &structs.SaramaKafkaAdmin{Admin: admin}, nil
 }
 
 func setKafkaVersion(versionStr string, saramaConfig *sarama.Config) error {
@@ -103,39 +82,41 @@ func setKafkaVersion(versionStr string, saramaConfig *sarama.Config) error {
 	return nil
 }
 
-func configureTLS(cfg *config.Config, saramaConfig *sarama.Config) error {
+func configureTLS(cluster config.KafkaCluster, saramaConfig *sarama.Config) error {
 	logrus.Debug("Configuring TLS settings")
-	tlsConfig, err := createTLSConfiguration(cfg)
+	tlsConfig, err := createTLSConfiguration(cluster)
 	if err != nil {
-		return fmt.Errorf("error configuring TLS: %w", err)
+		return fmt.Errorf("error configuring TLS for cluster '%s': %w", cluster.Name, err)
 	}
 	saramaConfig.Net.TLS.Enable = true
 	saramaConfig.Net.TLS.Config = tlsConfig
-	logrus.Debug("TLS configuration applied successfully")
+	logrus.Debugf("TLS configuration applied successfully for cluster '%s'", cluster.Name)
 	return nil
 }
 
-func createTLSConfiguration(cfg *config.Config) (*tls.Config, error) {
-	logrus.Debug("Creating TLS configuration")
-	sslConfig := cfg.Kafka.SSL
+func createTLSConfiguration(cluster config.KafkaCluster) (*tls.Config, error) {
+	logrus.Debugf("Creating TLS configuration for cluster '%s'", cluster.Name)
+	sslConfig := cluster.SSL
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: sslConfig.InsecureSkipVerify,
 	}
 
+	// Load the CA certificate if required
 	caCertPool, err := loadCACertificate()
 	if err != nil {
 		return nil, err
 	}
 	tlsConfig.RootCAs = caCertPool
 
+	// Load the client certificate and key if specified
 	if sslConfig.ClientCertificateFile != "" && sslConfig.ClientKeyFile != "" {
-		logrus.Debug("Loading client certificate and key")
+		logrus.Debugf("Loading client certificate and key for cluster '%s'", cluster.Name)
 		if err := loadClientCertificate(sslConfig.ClientCertificateFile, sslConfig.ClientKeyFile, tlsConfig); err != nil {
 			return nil, err
 		}
 	}
 
-	logrus.Debug("TLS configuration created successfully")
+	logrus.Debugf("TLS configuration created successfully for cluster '%s'", cluster.Name)
 	return tlsConfig, nil
 }
 

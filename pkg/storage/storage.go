@@ -21,7 +21,7 @@ type Storage interface {
 	GetNodeInfo(nodeID string) (int, int, error)
 	StartNodeHeartbeat(nodeID string, heartbeatInterval time.Duration, ttl int)
 	StartNodeMonitoring(monitorInterval time.Duration)
-	PersistLatestProducedOffsets(groupStructCompleteChan <-chan *structs.Group, groupStructCompleteAndPersistedChan chan<- *structs.Group, numWorkers int)
+	PersistLatestProducedOffsets(groupsWithLeaderInfoAndLeaderOffsetsChan <-chan *structs.Group, numWorkers int) <-chan *structs.Group
 	GracefulStop() error
 	Ping(ctx ...context.Context) error
 }

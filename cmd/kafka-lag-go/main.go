@@ -9,7 +9,6 @@ import (
 
 	"github.com/sciclon2/kafka-lag-go/pkg/kafka"
 	"github.com/sciclon2/kafka-lag-go/pkg/metrics"
-	"github.com/sciclon2/kafka-lag-go/pkg/structs"
 
 	_ "net/http/pprof"
 
@@ -38,9 +37,8 @@ func main() {
 	cfg.SetLogLevel()
 
 	// Initialize Kafka client and admin
-	client, admin, saramaConfig := maininit.InitializeKafkaClient(cfg)
-	defer client.Close()
-	defer admin.Close()
+	clientMap, adminMap, saramaConfigMap := maininit.InitializeKafkaClient(cfg)
+	//maininit.DeferCloseClientsAndAdmins(clientMap, adminMap)
 
 	// Set up and start Prometheus metrics HTTP server.
 	maininit.InitializeMetricsServer(cfg)
@@ -50,7 +48,7 @@ func main() {
 	defer store.GracefulStop()
 
 	// Initialize and start the ApplicationHeartbeat
-	maininit.InitializeAndStartHeartbeat(admin, store, heartbeatInterval*time.Second, cfg)
+	maininit.InitializeAndStartHealthcheck(adminMap, store, heartbeatInterval*time.Second, cfg)
 
 	// Generate a unique ID for this node.
 	nodeID := generateNodeID()
@@ -104,27 +102,20 @@ func main() {
 			logrus.Debugf("Total nodes: %d, Current node index: %d", totalNodes, registeredNodeIndex)
 		}
 
-		// Channels for handling consumer group data and results, and a WaitGroup for synchronization.
-		groupNameChan := make(chan string)
-		groupStructPartialChan := make(chan *structs.Group)
-		groupStructCompleteChan := make(chan *structs.Group)
-		groupStructCompleteAndPersistedChan := make(chan *structs.Group)
-		metricsToExportChan := make(chan *structs.Group)
-
-		// Start fetching consumer groups
-		kafka.FetchConsumerGroups(admin, groupNameChan, cfg)
+		// Assemble groups and fetch group topics
+		groupsChan := kafka.AssembleGroups(clientMap, adminMap, saramaConfigMap, cfg)
 
 		// Fetch and describe group topics
-		kafka.GetConsumerGroupsInfo(admin, client, groupNameChan, groupStructPartialChan, cfg.App.NumWorkers, registeredNodeIndex, totalNodes)
+		groupsWithLeaderInfoChan := kafka.GetConsumerGroupsInfo(groupsChan, cfg.App.NumWorkers, registeredNodeIndex, totalNodes)
 
 		// Process group offsets
-		kafka.GetLatestProducedOffsets(admin, groupStructPartialChan, groupStructCompleteChan, cfg.App.NumWorkers, saramaConfig)
+		groupsWithLeaderInfoAndLeaderOffsetsChan := kafka.GetLatestProducedOffsets(groupsWithLeaderInfoChan, cfg.App.NumWorkers)
 
-		store.PersistLatestProducedOffsets(groupStructCompleteChan, groupStructCompleteAndPersistedChan, cfg.App.NumWorkers)
+		groupsComplete := store.PersistLatestProducedOffsets(groupsWithLeaderInfoAndLeaderOffsetsChan, cfg.App.NumWorkers)
 
 		// Create an instance of LagProcessor
 		lp := metrics.NewLagProcessor()
-		lp.GenerateMetrics(groupStructCompleteAndPersistedChan, metricsToExportChan, cfg.App.NumWorkers)
+		metricsToExportChan := lp.GenerateMetrics(groupsComplete, cfg.App.NumWorkers)
 
 		// Start processing metrics concurrently
 		prometheusMetrics.ProcessMetrics(metricsToExportChan, cfg.App.NumWorkers, startTime)
@@ -153,19 +144,19 @@ func SleepToMaintainInterval(startTime time.Time, iterationInterval time.Duratio
 		select {
 		case <-timer.C:
 			// The wait time has passed, proceed with the next iteration
-			log.Println("Wait time elapsed. Proceeding with the next iteration.")
+			logrus.Debugf("Wait time elapsed. Proceeding with the next iteration.")
 		case <-sigChan:
 			// Signal received, force an immediate iteration
 			if !timer.Stop() {
 				<-timer.C // Drain the timer channel if necessary
 			}
-			log.Println("Received signal to proceed immediately. Skipping wait.")
+			logrus.Debugf("Received signal to proceed immediately. Skipping wait.")
 		}
 	} else {
-		log.Printf("Iteration took longer than the interval. Starting next iteration immediately.")
+		logrus.Debugf("Iteration took longer than the interval. Starting next iteration immediately.")
 	}
 
 	// Log the final timing for this iteration
 	totalElapsedTime := time.Since(startTime)
-	log.Printf("Total time elapsed for this iteration including wait time: %v", totalElapsedTime)
+	logrus.Debugf("Total time elapsed for this iteration including wait time: %v", totalElapsedTime)
 }

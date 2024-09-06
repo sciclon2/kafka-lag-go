@@ -42,8 +42,10 @@ func (m *MockStorage) StartNodeMonitoring(monitorInterval time.Duration) {
 }
 
 // PersistLatestProducedOffsets mocks the PersistLatestProducedOffsets method of the Storage interface.
-func (m *MockStorage) PersistLatestProducedOffsets(groupStructCompleteChan <-chan *structs.Group, groupStructCompleteAndPersistedChan chan<- *structs.Group, numWorkers int) {
-	m.Called(groupStructCompleteChan, groupStructCompleteAndPersistedChan, numWorkers)
+func (m *MockStorage) PersistLatestProducedOffsets(groupStructCompleteChan <-chan *structs.Group, numWorkers int) <-chan *structs.Group {
+	m.Called(groupStructCompleteChan, numWorkers)
+	mockReturnChan := make(chan *structs.Group)
+	return mockReturnChan
 }
 
 // GracefulStop mocks the GracefulStop method of the Storage interface without the context argument.

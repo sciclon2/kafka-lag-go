@@ -12,8 +12,10 @@ import (
 	"github.com/IBM/sarama"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sciclon2/kafka-lag-go/pkg/config"
-	"github.com/sciclon2/kafka-lag-go/pkg/heartbeat"
+	"github.com/sciclon2/kafka-lag-go/pkg/healthcheck"
 	"github.com/sciclon2/kafka-lag-go/pkg/kafka"
+	"github.com/sciclon2/kafka-lag-go/pkg/structs"
+
 	"github.com/sciclon2/kafka-lag-go/pkg/storage"
 	"github.com/sirupsen/logrus"
 )
@@ -30,14 +32,44 @@ func InitializeConfigAndLogging() *config.Config {
 	return cfg
 }
 
-// Return the kafka.KafkaClient type
-func InitializeKafkaClient(cfg *config.Config) (kafka.KafkaClient, kafka.KafkaAdmin, *sarama.Config) {
-	saramaConfig := sarama.NewConfig()
-	client, admin, err := kafka.CreateAdminAndClient(cfg, saramaConfig)
-	if err != nil {
-		logrus.Fatalf("%v", err)
+func InitializeKafkaClient(cfg *config.Config) (map[string]structs.KafkaClient, map[string]structs.KafkaAdmin, map[string]*sarama.Config) {
+	clientMap := make(map[string]structs.KafkaClient)
+	adminMap := make(map[string]structs.KafkaAdmin)
+	saramaConfigMap := make(map[string]*sarama.Config)
+
+	for _, cluster := range cfg.KafkaClusters {
+		saramaConfig := sarama.NewConfig()
+
+		client, admin, err := kafka.CreateAdminAndClient(cluster, saramaConfig)
+		if err != nil {
+			logrus.Fatalf("Failed to create Kafka client and admin for cluster '%s': %v", cluster.Name, err)
+		}
+
+		clientMap[cluster.Name] = client
+		adminMap[cluster.Name] = admin
+		saramaConfigMap[cluster.Name] = saramaConfig
+
 	}
-	return client, admin, saramaConfig
+
+	return clientMap, adminMap, saramaConfigMap
+}
+
+func DeferCloseClientsAndAdmins(clientMap map[string]structs.KafkaClient, adminMap map[string]structs.KafkaAdmin) {
+	for clusterName, client := range clientMap {
+		defer func(c structs.KafkaClient, name string) {
+			if err := c.Close(); err != nil {
+				logrus.Errorf("Error closing Kafka client for cluster %s: %v", name, err)
+			}
+		}(client, clusterName)
+	}
+
+	for clusterName, admin := range adminMap {
+		defer func(a structs.KafkaAdmin, name string) {
+			if err := a.Close(); err != nil {
+				logrus.Errorf("Error closing Kafka admin for cluster %s: %v", name, err)
+			}
+		}(admin, clusterName)
+	}
 }
 
 func InitializeStorage(cfg *config.Config) storage.Storage {
@@ -70,8 +102,8 @@ func InitializeSignalHandling() chan os.Signal {
 }
 
 // initializeAndStartHeartbeat initializes the ApplicationHeartbeat and starts the health check routine.
-func InitializeAndStartHeartbeat(kafkaAdmin kafka.KafkaAdmin, store storage.Storage, interval time.Duration, cfg *config.Config) *heartbeat.ApplicationHeartbeat {
-	applicationHeartbeat := heartbeat.NewApplicationHeartbeat(kafkaAdmin, store, interval, cfg.App.HealthCheckPort, cfg.App.HealthCheckPath)
+func InitializeAndStartHealthcheck(kafkaAdmins map[string]structs.KafkaAdmin, store storage.Storage, interval time.Duration, cfg *config.Config) *healthcheck.ApplicationHealthchech {
+	applicationHeartbeat := healthcheck.NewApplicationHealthcheck(kafkaAdmins, store, interval, cfg.App.HealthCheckPort, cfg.App.HealthCheckPath)
 	applicationHeartbeat.Start()
 	return applicationHeartbeat
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/sciclon2/kafka-lag-go/pkg/config"
+	"github.com/sirupsen/logrus"
 
 	"github.com/IBM/sarama"
 	"github.com/xdg-go/scram"
@@ -37,16 +38,17 @@ func (x *XDGSCRAMClient) Done() bool {
 	return x.ClientConversation.Done()
 }
 
-// ConfigureSASL sets up SASL authentication for the Sarama client based on the provided configuration.
-func ConfigureSASL(cfg *config.Config, saramaConfig *sarama.Config) error {
-	kafkaConfig := cfg.Kafka
+func ConfigureSASL(cluster config.KafkaCluster, saramaConfig *sarama.Config) error {
+	saslConfig := cluster.SASL
 
+	// Enable SASL
 	saramaConfig.Net.SASL.Enable = true
-	saramaConfig.Net.SASL.User = kafkaConfig.SASL.User
-	saramaConfig.Net.SASL.Password = kafkaConfig.SASL.Password
+	saramaConfig.Net.SASL.User = saslConfig.User
+	saramaConfig.Net.SASL.Password = saslConfig.Password
 	saramaConfig.Net.SASL.Handshake = true
 
-	switch kafkaConfig.SASL.Mechanism {
+	// Configure the appropriate SASL mechanism
+	switch saslConfig.Mechanism {
 	case "SCRAM-SHA-256":
 		saramaConfig.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient {
 			return &XDGSCRAMClient{HashGeneratorFcn: scram.SHA256}
@@ -58,8 +60,9 @@ func ConfigureSASL(cfg *config.Config, saramaConfig *sarama.Config) error {
 		}
 		saramaConfig.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA512
 	default:
-		return fmt.Errorf("invalid SASL mechanism: %s", kafkaConfig.SASL.Mechanism)
+		return fmt.Errorf("invalid SASL mechanism: %s", saslConfig.Mechanism)
 	}
 
+	logrus.Debugf("SASL configuration applied successfully for cluster '%s'", cluster.Name)
 	return nil
 }

@@ -12,9 +12,10 @@ import (
 )
 
 // PersistLatestProducedOffsets reads from the groupStructCompleteChan, processes the data,
-// and writes the processed data to groupStructCompleteAndPersistedChan. The concurrency logic
-// is encapsulated within this function.
-func (rm *RedisManager) PersistLatestProducedOffsets(groupStructCompleteChan <-chan *structs.Group, groupStructCompleteAndPersistedChan chan<- *structs.Group, numWorkers int) {
+// and returns a channel with the processed data.
+func (rm *RedisManager) PersistLatestProducedOffsets(groupsWithLeaderInfoAndLeaderOffsetsChan <-chan *structs.Group, numWorkers int) <-chan *structs.Group {
+	groupsComplete := make(chan *structs.Group)
+
 	var wg sync.WaitGroup
 
 	// Start multiple goroutines to process the groups concurrently
@@ -23,7 +24,7 @@ func (rm *RedisManager) PersistLatestProducedOffsets(groupStructCompleteChan <-c
 		go func() {
 			defer wg.Done()
 
-			for group := range groupStructCompleteChan {
+			for group := range groupsWithLeaderInfoAndLeaderOffsetsChan {
 				// Process the Group struct here (e.g., persist the latest produced offsets to storage)
 				err := rm.addNewProducedOffsets(group)
 				if err != nil {
@@ -35,7 +36,7 @@ func (rm *RedisManager) PersistLatestProducedOffsets(groupStructCompleteChan <-c
 				rm.fetchProducedOffsetsHistory(group)
 
 				// Send the processed Group struct pointer to the output channel
-				groupStructCompleteAndPersistedChan <- group
+				groupsComplete <- group
 			}
 		}()
 	}
@@ -44,9 +45,13 @@ func (rm *RedisManager) PersistLatestProducedOffsets(groupStructCompleteChan <-c
 	go func() {
 		wg.Wait()
 		// Close the output channel after all input data is processed
-		close(groupStructCompleteAndPersistedChan)
+		close(groupsComplete)
 	}()
+
+	return groupsComplete
 }
+
+//groupsWithLeaderInfoAndLeaderOffsetsChan
 
 // processAndPersistGroup is a helper function that processes a group and persists its data to Redis.
 func (rm *RedisManager) addNewProducedOffsets(group *structs.Group) error {
@@ -59,7 +64,7 @@ func (rm *RedisManager) addNewProducedOffsets(group *structs.Group) error {
 				continue
 			}
 
-			redisKey := fmt.Sprintf("%s:%d", topic.Name, partition.Number)
+			redisKey := fmt.Sprintf("%s:%s:%d", group.ClusterName, topic.Name, partition.Number)
 			args := []interface{}{
 				redisKey,                       // The Redis key for the ZSET
 				partition.LatestProducedOffset, // The offset to add
@@ -110,8 +115,7 @@ func (rm *RedisManager) queueProducedOffsetsHistory(group *structs.Group) (map[s
 
 	for _, topic := range group.Topics {
 		for _, partition := range topic.Partitions {
-			// Create Redis key: topicname:partition_number
-			redisKey := fmt.Sprintf("%s:%d", topic.Name, partition.Number)
+			redisKey := fmt.Sprintf("%s:%s:%d", group.ClusterName, topic.Name, partition.Number)
 
 			// Debugging: Log the redisKey being queued
 			logrus.Debugf("Queuing ZRANGE WITHSCORES for Redis key: %s\n", redisKey)
@@ -141,8 +145,7 @@ func (rm *RedisManager) processProducedOffsetsHistory(group *structs.Group, pipe
 		for j := range topic.Partitions {
 			partition := &topic.Partitions[j] // Get a pointer to the partition
 
-			// Create Redis key: topicname:partition_number
-			redisKey := fmt.Sprintf("%s:%d", topic.Name, partition.Number)
+			redisKey := fmt.Sprintf("%s:%s:%d", group.ClusterName, topic.Name, partition.Number)
 			logrus.Debugf("Processing Redis key: %s for Partition: %d\n", redisKey, partition.Number)
 
 			// Retrieve the pipeline result for this key

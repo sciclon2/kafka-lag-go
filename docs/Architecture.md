@@ -1,27 +1,45 @@
 # Project Architecture Overview
-The architecture of this project is designed using a modular, pipeline-based approach that efficiently manages data flow and processing tasks through Go’s concurrency model. Key to this design is the use of channels and goroutines, combined with the careful handling of the Group structure to minimize unnecessary copying of data. The entire process is defined by iterations, where the application periodically calculates the lag metrics based on the latest data. These iterations ensure that the lag information is consistently up-to-date and accurately reflects the current state of the Kafka consumer groups.
 
-## App flow
+Kafka Lag Go is designed using a modular, pipeline-based approach that efficiently manages data flow and processing tasks through Go’s concurrency model. Key to this design is the use of channels and goroutines, along with the careful handling of the `Group` structure to minimize unnecessary data copying. 
+
+Each iteration of the process recalculates consumer group lag metrics, ensuring that the application provides an up-to-date snapshot of Kafka consumer group performance. By distributing tasks across multiple workers, the application processes large volumes of data efficiently.
+
+### Detailed App Flow
+
+1. **AssembleGroups**: This function retrieves the list of consumer groups from all Kafka servers, populates the `Group` struct with the group name, cluster name, and committed offsets. It also applies filters for the whitelist or blacklist of consumer groups.
+  
+2. **GetConsumerGroupsInfo**: This step fetches the partition leader for all partitions of the consumer groups, further populating the `Group` struct with partition leadership information.
+
+3. **GetLatestProducedOffsets**: Organizes and sends requests to the corresponding Kafka brokers to get the latest produced offsets for the partitions, storing this information in the `Group` struct.
+
+4. **PersistLatestProducedOffsets**: Stores the latest produced offsets in the configured storage entity (e.g., Redis).
+
+5. **ProcessMetrics**: Aggregates the data, calculates lag metrics, and exposes them via the Prometheus metrics endpoint.
+
+This pipeline ensures that Kafka Lag Go efficiently processes consumer group data and exports accurate lag metrics for monitoring through Prometheus.
+
+### App Flow
 ```mermaid
 flowchart TD
-    A[FetchConsumerGroups]
+flowchart TD
+    A[AssembleGroups]
     A -->|List of Consumer Groups| B[groupNameChan]
 
     B --> C1[GetConsumerGroupsInfo]
     B --> C2[GetConsumerGroupsInfo]
     B --> C3[GetConsumerGroupsInfo]
 
-    C1 -->|Partially Populated Group| D[groupStructPartialChan]
-    C2 -->|Partially Populated Group| D
-    C3 -->|Partially Populated Group| D
+    C1 -->|Group with Leader Info| D[groupStructWithLeaderInfoChan]
+    C2 -->|Group with Leader Info| D
+    C3 -->|Group with Leader Info| D
 
     D --> E1[GetLatestProducedOffsets]
     D --> E2[GetLatestProducedOffsets]
     D --> E3[GetLatestProducedOffsets]
 
-    E1 -->|Fully Populated Group with Offsets| F[groupStructCompleteChan]
-    E2 -->|Fully Populated Group with Offsets| F
-    E3 -->|Fully Populated Group with Offsets| F
+    E1 -->|Group with Latest Produced Offsets| F[groupStructWithLeaderOffsetsChan]
+    E2 -->|Group with Latest Produced Offsets| F
+    E3 -->|Group with Latest Produced Offsets| F
 
     F --> G1[PersistLatestProducedOffsets]
     F --> G2[PersistLatestProducedOffsets]
@@ -50,62 +68,38 @@ flowchart TD
 
 
 ## Key Structures
-- Group: Represents a Kafka consumer group. It starts as an incomplete object, with only the Name field initialized. As the Group object progresses through the pipeline, its fields are populated with the necessary data.
-  - Name: The name of the consumer group.
-  - Topics: A list of topics associated with the consumer group.
-  - MaxLagInOffsets: The maximum lag in offsets across all topics in the group.
-  - MaxLagInSeconds: The maximum lag in seconds across all topics in the group.
-  - SumLagInOffsets: The total lag in offsets across all topics in the group.
-  - SumLagInSeconds: The total lag in seconds across all topics in the group.
-- Topic: Represents a Kafka topic within a consumer group.
-  - Name: The name of the topic.
-  - Partitions: A list of partitions within the topic.
-  - SumLagInOffsets: The total lag in offsets across all partitions in the topic.
-  - SumLagInSeconds: The total lag in seconds across all partitions in the topic.
-  - MaxLagInOffsets: The maximum lag in offsets across all partitions in the topic.
-  - MaxLagInSeconds: The maximum lag in seconds across all partitions in the topic.
-- Partition: Represents a partition within a Kafka topic.
-  - Number: The partition number.
-  - CommitedOffset: The committed offset for this partition.
-  - LatestProducedOffset: The latest produced offset for this partition.
-  - LatestProducedOffsetAt: The timestamp when the latest produced offset was set.
-  - ProducedOffsetsHistory: A slice storing the history of produced offsets.
-  - LeaderBroker: Interface to the leader broker for this partition.
-  - LagInOffsets: The calculated offset lag.
-  - LagInSeconds: The calculated time lag in seconds.
 
-## Architecture Workflow explained
-1. FetchConsumerGroups:
-	- The process begins with the FetchConsumerGroups function, which retrieves a list of all consumer groups in the Kafka cluster.
-2. Channel: groupNameChan:
-	- The list of consumer groups is sent into the groupNameChan channel. This channel transports the names of the consumer groups to the next processing stage.
-3. GetConsumerGroupsInfo (Goroutines):
-	- Multiple goroutines, managed by GetConsumerGroupsInfo, read from groupNameChan.
-	- Each goroutine fetches detailed information about the consumer group, including topics, partitions, leader brokers, and committed offsets.
-	- A Group structure is initialized for each consumer group, and this structure is passed by pointer through the channels to avoid copying large amounts of data multiple times. The populated Group pointer is then sent to the groupStructPartialChan channel.
-4. Channel: groupStructPartialChan:
-	- The groupStructPartialChan channel holds partially populated Group pointers, ready for further processing.
-5. GetLatestProducedOffsets (Goroutines):
-	- Another set of goroutines, running the GetLatestProducedOffsets function, reads from groupStructPartialChan.
-	- These goroutines fetch the latest produced offsets for each partition in the group, updating the Group structure.
-	- The updated Group pointer is then sent to the groupStructCompleteChan channel.
-6. Channel: groupStructCompleteChan:
-	- The groupStructCompleteChan channel carries fully populated Group pointers, including the latest produced offsets.
-7. PersistLatestProducedOffsets (Goroutines):
-	- Goroutines running the PersistLatestProducedOffsets function read from groupStructCompleteChan.
-	- These goroutines persist the latest produced offsets to the persistent storage and update the Group structure with this information.
-	- The Group pointer is then sent to groupStructCompleteAndPersistedChan.
-8. Channel: groupStructCompleteAndPersistedChan:
-	- This channel holds fully processed and persisted Group pointers, ready for metric generation.
-9. GenerateMetrics (Goroutines):
-	- The GenerateMetrics function spawns goroutines that read from groupStructCompleteAndPersistedChan.
-	- These goroutines calculate the relevant metrics, such as lag in offsets and seconds at both the consumer group and topic levels.
-	- The metrics are added to the Group structure, which is then sent to metricsToExportChan.
-10. Channel: metricsToExportChan:
-	 - The metricsToExportChan channel carries Group pointers, now enriched with calculated metrics, to the final stage.
-11. ProcessMetrics (Goroutines):
-	 - Finally, goroutines running the ProcessMetrics function read from metricsToExportChan.
-	 - These goroutines export the metrics to a Prometheus endpoint, making them available for monitoring.
+- **Group**: Represents a Kafka consumer group. Initially, only the `Name` and `ClusterName` fields are populated. As the Group object progresses through the pipeline, more fields are populated with relevant data such as offsets, lags, and topic details.
+  - `Name`: The name of the consumer group.
+  - `ClusterName`: The name of the Kafka cluster where the consumer group resides.
+  - `Admin`: Interface to the Kafka admin client for managing the group.
+  - `Client`: Interface to the Kafka client for producing/consuming data.
+  - `SaramaConfig`: Sarama configuration for the Kafka client.
+  - `Topics`: A list of topics associated with the consumer group.
+  - `MaxLagInOffsets`: The maximum lag in offsets across all topics in the group.
+  - `MaxLagInSeconds`: The maximum lag in seconds across all topics in the group.
+  - `SumLagInOffsets`: The total lag in offsets across all topics in the group.
+  - `SumLagInSeconds`: The total lag in seconds across all topics in the group.
+
+- **Topic**: Represents a Kafka topic within a consumer group.
+  - `Name`: The name of the topic.
+  - `Partitions`: A list of partitions within the topic.
+  - `SumLagInOffsets`: The total lag in offsets across all partitions in the topic.
+  - `SumLagInSeconds`: The total lag in seconds across all partitions in the topic.
+  - `MaxLagInOffsets`: The maximum lag in offsets across all partitions in the topic.
+  - `MaxLagInSeconds`: The maximum lag in seconds across all partitions in the topic.
+
+- **Partition**: Represents a partition within a Kafka topic.
+  - `Number`: The partition number.
+  - `CommitedOffset`: The committed offset for this partition.
+  - `LatestProducedOffset`: The latest produced offset for this partition. A value of `0` can signify that the value has not yet been fetched or is unavailable.
+  - `LatestProducedOffsetAt`: The timestamp when the latest produced offset was set. A value of `0` can signify that it has not been set.
+  - `ProducedOffsetsHistory`: A slice storing the history of produced offsets. An empty slice can signify no history is available.
+  - `LeaderBroker`: Interface to the leader broker for this partition, implemented using `*sarama.Broker` for consistency with Sarama API.
+  - `LagInOffsets`: The calculated offset lag. A value of `0` can signify that it has not yet been calculated or there's no lag.
+  - `LagInSeconds`: The calculated time lag in seconds. A value of `0` can signify that it has not yet been calculated or there's no lag.
+
+
 
 
 ## Scalability and Load Distribution
@@ -119,6 +113,23 @@ Consistent hashing automatically distributes the workload across the available n
 In monolithic systems, the gap between fetching the latest produced offsets and committed offsets can widen, leading to inaccurate or even negative lag calculations. By contrast, this architecture maintains accurate and timely processing even as the system scales.
 
 Additionally, when querying Kafka brokers for partition leaders, the system optimizes load distribution by assembling requests per broker, targeting only the partitions they lead. This approach ensures that the requests for a consumer group’s topic partitions are evenly distributed among brokers, enhancing the performance and reliability of the system.
+
+
+## Pipeline Model: Group Structure and Data Flow
+
+The `Group` structure is created for each Kafka consumer group, and it serves as the core entity that moves through the different stages of the pipeline. Each `Group` is passed by reference among the various steps, ensuring that all updates and modifications are made in place without creating unnecessary copies. This approach provides several key advantages:
+
+- **Isolation of Data**: Each `Group` represents an isolated entity that is never accessed concurrently by multiple goroutines. This ensures thread safety without the need for locks or complex synchronization mechanisms.
+  
+- **Passing by Reference**: Instead of copying the `Group` structure at each stage, we send a reference to the `Group` through the channels. Since the `Group` is never accessed in parallel by different goroutines, passing a reference eliminates the overhead of copying and reduces memory usage, ensuring efficient data handling.
+
+- **Progressive Population**: The `Group` starts as an empty structure with only the consumer group name and cluster name initialized. At each step in the pipeline, new data is populated in the `Group` that is required for subsequent steps, such as consumer offsets, partition leader information, and produced offsets.
+
+- **Efficient Data Flow**: As soon as a `Group` completes a step, it is sent to a channel where the next step in the pipeline can pick it up and continue processing. This asynchronous handoff allows for parallel processing, ensuring that multiple `Group` structures can be in different stages of the pipeline without interfering with each other.
+
+- **High Throughput**: By using this model, the application can process many `Group` structures simultaneously, with each group progressing through the pipeline independently. This design enables a high throughput of groups, allowing the system to efficiently handle large volumes of Kafka consumer groups even at different stages of the processing pipeline.
+
+This approach of passing the `Group` structure by reference through a series of channels ensures scalability and efficient resource usage, while keeping the overall system flexible and modular.
 
 
 ## Storage

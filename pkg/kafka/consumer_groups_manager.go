@@ -15,28 +15,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func FetchConsumerGroups(admin KafkaAdmin, groupChan chan<- string, config *config.Config) {
-	go func() {
-		logrus.Debugf("Fetching consumer groups")
-		consumerGroups, err := admin.ListConsumerGroups()
-		if err != nil {
-			logrus.Fatalf("Error listing consumer groups: %v", err)
-		}
-
-		// Prepare regex patterns from the config
-		blacklist := config.Kafka.ConsumerGroups.Blacklist
-		whitelist := config.Kafka.ConsumerGroups.Whitelist
-
-		for groupID := range consumerGroups {
-			// Apply filters to each consumer group
-			if isGroupAllowed(groupID, blacklist, whitelist) {
-				groupChan <- groupID
-			}
-		}
-		close(groupChan)
-	}()
-}
-
 // isGroupAllowed checks if a given consumer group ID is allowed based on the provided blacklist
 // and whitelist filters. The function first checks the whitelist (if provided), and then the blacklist.
 // A consumer group is allowed if it matches the whitelist or does not match the blacklist.
@@ -58,9 +36,13 @@ func isGroupAllowed(groupID string, blacklist *regexp.Regexp, whitelist *regexp.
 	return true
 }
 
-func GetConsumerGroupsInfo(admin KafkaAdmin, client KafkaClient, groupNameChan <-chan string, groupStructPartialChan chan<- *structs.Group, numWorkers int, nodeIndex, totalNodes int) {
+func GetConsumerGroupsInfo(
+	groupsChan <-chan *structs.Group,
+	numWorkers int,
+	nodeIndex, totalNodes int) <-chan *structs.Group {
+
 	var wg sync.WaitGroup
-	client.RefreshMetadata()
+	groupsWithLeaderInfoChan := make(chan *structs.Group)
 
 	// Start multiple workers to process consumer groups concurrently
 	wg.Add(numWorkers)
@@ -68,34 +50,100 @@ func GetConsumerGroupsInfo(admin KafkaAdmin, client KafkaClient, groupNameChan <
 		go func() {
 			defer wg.Done()
 
-			for groupID := range groupNameChan {
-				logrus.Debugf("Checking if group %s should be processed by node index %d out of %d nodes", groupID, nodeIndex, totalNodes)
-				if isGroupAssignedToNode(groupID, nodeIndex, totalNodes) {
-					group, err := createGroupStruct(admin, groupID)
-					if err != nil {
-						logrus.Warnf("Error creating group struct for group %s: %v", groupID, err)
-						continue
+			for group := range groupsChan {
+				logrus.Debugf("Checking if group %s should be processed by node index %d out of %d nodes", group.Name, nodeIndex, totalNodes)
+				if isGroupAssignedToNode(group.Name, nodeIndex, totalNodes) {
+					// Refresh metadata before processing the group
+					if err := group.Client.RefreshMetadata(); err != nil {
+						logrus.Warnf("Error refreshing metadata for group %s: %v", group.Name, err)
 					}
 
 					if len(group.Topics) > 0 {
-						err := populateLeaderBrokerInfo(admin, client, group)
+						err := populateLeaderBrokerInfo(group)
 						if err != nil {
-							logrus.Warnf("Error populating leader broker info for group %s: %v", groupID, err)
+							logrus.Warnf("Error populating leader broker info for group %s: %v", group.Name, err)
 							continue
 						}
 					}
-
-					groupStructPartialChan <- group
+					groupsWithLeaderInfoChan <- group
 				}
 			}
 		}()
 	}
 
-	// Wait for all workers to finish and then close the channel
+	// Close the channel after all workers are done
 	go func() {
 		wg.Wait()
-		close(groupStructPartialChan)
+		close(groupsWithLeaderInfoChan)
 	}()
+
+	return groupsWithLeaderInfoChan
+}
+
+func AssembleGroups(
+	clientMap map[string]structs.KafkaClient,
+	adminMap map[string]structs.KafkaAdmin,
+	saramaConfigMap map[string]*sarama.Config,
+	cfg *config.Config) <-chan *structs.Group {
+
+	groupsChan := make(chan *structs.Group)
+	var wg sync.WaitGroup
+
+	// Iterate over each Kafka cluster (admin, client, and saramaConfig)
+	for clusterName, admin := range adminMap {
+		client, ok := clientMap[clusterName]
+		if !ok {
+			logrus.Warnf("No client found for cluster: %s", clusterName)
+			continue
+		}
+
+		saramaConfig, ok := saramaConfigMap[clusterName]
+		if !ok {
+			logrus.Warnf("No sarama config found for cluster: %s", clusterName)
+			continue
+		}
+
+		wg.Add(1)
+		go func(clusterName string, admin structs.KafkaAdmin, client structs.KafkaClient, saramaConfig *sarama.Config) {
+			defer wg.Done()
+			// Fetch the list of consumer groups for this cluster
+			groupIDs, err := admin.ListConsumerGroups()
+			if err != nil {
+				logrus.Errorf("Failed to list consumer groups for cluster %s: %v", clusterName, err)
+				return
+			}
+			// Create Group structs for each consumer group
+			for groupID := range groupIDs {
+				// Retrieve the specific cluster configuration
+				clusterConfig, err := cfg.GetClusterConfig(clusterName)
+				if err != nil {
+					logrus.Warnf("Error retrieving configuration for cluster %s: %v", clusterName, err)
+					continue
+				}
+				if isGroupAllowed(groupID, clusterConfig.ConsumerGroups.Blacklist, clusterConfig.ConsumerGroups.Whitelist) {
+					group, err := createGroupStruct(clusterName, admin, client, saramaConfig, groupID)
+					if err != nil {
+						logrus.Warnf("Error creating group struct for group %s in cluster %s: %v", groupID, clusterName, err)
+						continue
+					}
+
+					// Send the group struct to the channel
+					groupsChan <- group
+				} else {
+					logrus.Debugf("Group %s in cluster %s did not pass the whitelist/blacklist filter", groupID, clusterName)
+				}
+
+			}
+		}(clusterName, admin, client, saramaConfig)
+	}
+
+	// Close the channel once all goroutines have completed
+	go func() {
+		wg.Wait()
+		close(groupsChan)
+	}()
+
+	return groupsChan
 }
 
 func isGroupAssignedToNode(groupID string, nodeIndex, totalNodes int) bool {
@@ -107,9 +155,20 @@ func isGroupAssignedToNode(groupID string, nodeIndex, totalNodes int) bool {
 	return shouldProcess
 }
 
-func createGroupStruct(admin KafkaAdmin, groupID string) (*structs.Group, error) {
+// func createGroupStruct(admin KafkaAdmin, groupID string) (*structs.Group, error) {
+func createGroupStruct(
+	clusterName string,
+	admin structs.KafkaAdmin,
+	client structs.KafkaClient,
+	saramaConfig *sarama.Config,
+	groupID string) (*structs.Group, error) {
+
 	group := &structs.Group{
 		Name:            groupID,
+		ClusterName:     clusterName,
+		Admin:           admin,
+		Client:          client,
+		SaramaConfig:    saramaConfig,
 		Topics:          []structs.Topic{},
 		MaxLagInOffsets: -1, // Initialize MaxLagInOffsets to -1
 		MaxLagInSeconds: -1, // Initialize MaxLagInSeconds to -1
@@ -117,6 +176,7 @@ func createGroupStruct(admin KafkaAdmin, groupID string) (*structs.Group, error)
 		SumLagInSeconds: -1, // Initialize SumLagInSeconds to -1
 	}
 
+	// Fetch the offsets for the consumer group
 	offsetFetchResponse, err := admin.ListConsumerGroupOffsets(groupID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching offsets for group %s: %v", groupID, err)
@@ -138,12 +198,12 @@ func createGroupStruct(admin KafkaAdmin, groupID string) (*structs.Group, error)
 				partitionStruct := structs.Partition{
 					Number:                 partition,
 					CommitedOffset:         block.Offset,
-					ProducedOffsetsHistory: []redis.Z{},      // Initialize as empty slice
-					LatestProducedOffset:   -1,               // Initialize as -1
-					LatestProducedOffsetAt: -1,               // Initialize as -1
-					LeaderBroker:           &sarama.Broker{}, // Initialize as a pointer to an empty Broker
-					LagInOffsets:           -1,               // Initialize as -1
-					LagInSeconds:           -1,               // Initialize as -1
+					ProducedOffsetsHistory: []redis.Z{}, // Initialize as empty slice
+					LatestProducedOffset:   -1,          // Initialize as -1
+					LatestProducedOffsetAt: -1,          // Initialize as -1
+					LeaderBroker:           nil,         // Initialize as nil, to be assigned later
+					LagInOffsets:           -1,          // Initialize as -1
+					LagInSeconds:           -1,          // Initialize as -1
 				}
 
 				topicStruct.Partitions = append(topicStruct.Partitions, partitionStruct)
@@ -158,8 +218,8 @@ func createGroupStruct(admin KafkaAdmin, groupID string) (*structs.Group, error)
 	return group, nil
 }
 
-func populateLeaderBrokerInfo(admin KafkaAdmin, client KafkaClient, group *structs.Group) error {
-	leaderMap, err := getTopicPartitionLeaders(admin, client, group.Topics)
+func populateLeaderBrokerInfo(group *structs.Group) error {
+	leaderMap, err := getTopicPartitionLeaders(group)
 	if err != nil {
 		return fmt.Errorf("error describing topics: %v", err)
 	}
@@ -167,10 +227,47 @@ func populateLeaderBrokerInfo(admin KafkaAdmin, client KafkaClient, group *struc
 	for i, topic := range group.Topics {
 		for j, partition := range topic.Partitions {
 			if broker, ok := leaderMap[partition.Number]; ok {
-				group.Topics[i].Partitions[j].LeaderBroker = broker.(structs.BrokerInterface)
+				group.Topics[i].Partitions[j].LeaderBroker = broker
+			} else {
+				fmt.Printf("No Broker assigned to Partition %d\n", partition.Number)
 			}
 		}
 	}
 
 	return nil
+}
+
+func getTopicPartitionLeaders(group *structs.Group) (map[int32]*sarama.Broker, error) { // Now returns map[int32]*sarama.Broker
+	client := group.Client
+
+	// Create a map of broker IDs to their corresponding *sarama.Broker
+	brokerMap := make(map[int32]*sarama.Broker)
+	for _, broker := range client.Brokers() {
+		brokerMap[broker.ID()] = broker
+	}
+
+	// Fetch the metadata to identify partition leaders
+	admin := group.Admin
+	topicNames := make([]string, len(group.Topics))
+	for i, topic := range group.Topics {
+		topicNames[i] = topic.Name
+	}
+
+	topicMetadata, err := admin.DescribeTopics(topicNames)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a map of partition IDs to their leader brokers
+	leaderMap := make(map[int32]*sarama.Broker)
+	for _, topic := range topicMetadata {
+		for _, partition := range topic.Partitions {
+			leader := brokerMap[partition.Leader]
+			if leader != nil {
+				leaderMap[partition.ID] = leader
+			}
+		}
+	}
+
+	return leaderMap, nil
 }

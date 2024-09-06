@@ -47,16 +47,15 @@ func TestGenerateMetrics(t *testing.T) {
 		Topics: topics,
 	}
 
-	// Channels for input and output
+	// Channels for input
 	groupStructCompleteAndPersistedChan := make(chan *structs.Group, 1)
-	metricsToExportChan := make(chan *structs.Group, 1)
 
 	// Send the group into the input channel
 	groupStructCompleteAndPersistedChan <- group
 	close(groupStructCompleteAndPersistedChan)
 
-	// Call the GenerateMetrics method
-	go lp.GenerateMetrics(groupStructCompleteAndPersistedChan, metricsToExportChan, 2)
+	// Call the GenerateMetrics method with 2 workers
+	metricsToExportChan := lp.GenerateMetrics(groupStructCompleteAndPersistedChan, 2)
 
 	// Read the result from the output channel
 	processedGroup := <-metricsToExportChan

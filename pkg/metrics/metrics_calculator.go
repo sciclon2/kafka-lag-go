@@ -301,23 +301,33 @@ func (lp *LagProcessor) interpolateOrExtrapolateTimestamp(lastConsumedOffset, lo
 	return lowerTimestamp + ((lastConsumedOffset - lowerOffset) * deltaTime / deltaOffset)
 }
 
-func (lp *LagProcessor) GenerateMetrics(groupStructCompleteAndPersistedChan <-chan *structs.Group, metricsToExportChan chan<- *structs.Group, numWorkers int) {
+// GenerateMetrics processes groups from the groupStructCompleteAndPersistedChan channel,
+// calculates lag metrics, and returns a channel with the processed data.
+func (lp *LagProcessor) GenerateMetrics(groupsComplete <-chan *structs.Group, numWorkers int) <-chan *structs.Group {
+	metricsToExportChan := make(chan *structs.Group)
+
 	var wg sync.WaitGroup
 
+	// Start multiple goroutines to process the groups concurrently
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for group := range groupStructCompleteAndPersistedChan {
+			for group := range groupsComplete {
 				// Process the group to calculate lag metrics
 				lp.processGroup(group)
 
+				// Send the processed group to the output channel
 				metricsToExportChan <- group
 			}
 		}()
 	}
+
+	// Close the channel after all workers are done
 	go func() {
 		wg.Wait()
 		close(metricsToExportChan)
 	}()
+
+	return metricsToExportChan
 }
