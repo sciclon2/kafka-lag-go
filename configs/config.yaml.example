@@ -1,0 +1,55 @@
+prometheus:
+  metrics_port: 9090  # Port where Prometheus metrics will be exposed
+  labels:             # Optional labels for Prometheus metrics
+    env: "production"
+    service: "kafka-lag-go"
+
+kafka_clusters:
+  - name: "cluster-1"  # First Kafka cluster
+    brokers:
+      - "broker1:9092"
+      - "broker2:9092"
+    client_request_timeout: "30s"  # Timeout for Kafka client requests
+    metadata_fetch_timeout: "5s"   # Timeout for fetching metadata
+    consumer_groups:
+      whitelist: ".*"             # Optional regex to whitelist consumer groups
+      blacklist: "test.*"         # Optional regex to blacklist consumer groups
+    ssl:
+      enabled: true
+      client_certificate_file: "/path/to/cert.pem"
+      client_key_file: "/path/to/key.pem"
+      insecure_skip_verify: true
+    sasl:
+      enabled: true
+      mechanism: "SCRAM-SHA-512"   # Supported: SCRAM-SHA-256 or SCRAM-SHA-512
+      user: "kafkaUser"
+      password: "kafkaPassword"
+
+  - name: "cluster-2"  # Second Kafka cluster
+    brokers:
+      - "broker3:9092"
+      - "broker4:9092"
+    client_request_timeout: "30s"
+    metadata_fetch_timeout: "5s"
+    consumer_groups:
+      whitelist: "my-group-.*"
+    ssl:
+      enabled: false  # SSL disabled
+    sasl:
+      enabled: false  # SASL disabled
+
+storage:
+  type: "redis"  # Redis as the storage type
+  redis:
+    address: "redis-server"  # Redis server address
+    port: 6379
+    client_request_timeout: "60s"
+    client_idle_timeout: "5m"
+    retention_ttl_seconds: 7200  # TTL for Redis keys (in seconds)
+
+app:
+  iteration_interval: "30s"    # Time interval between each iteration
+  num_workers: 10              # Number of workers for concurrent processing
+  log_level: "info"            # Log level (e.g., debug, info, warn)
+  health_check_port: 8080      # Port for the health check endpoint
+  health_check_path: "/healthz"  # Path for the health check endpoint
