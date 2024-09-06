@@ -173,9 +173,6 @@ func (ah *ApplicationHealthchech) HealthCheckHandler(w http.ResponseWriter, r *h
 		response.Status = "Unhealthy"
 	}
 
-	// Log the response for debugging purposes
-	logrus.Infof("HealthCheckHandler response: %+v", response)
-
 	// Always return 200 OK status, with the health status in the body
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)

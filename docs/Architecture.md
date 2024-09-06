@@ -21,7 +21,6 @@ This pipeline ensures that Kafka Lag Go efficiently processes consumer group dat
 ### App Flow
 ```mermaid
 flowchart TD
-flowchart TD
     A[AssembleGroups]
     A -->|List of Consumer Groups| B[groupNameChan]
 
