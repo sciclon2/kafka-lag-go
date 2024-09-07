@@ -90,6 +90,8 @@ func (ah *ApplicationHealthchech) Start() {
 	}()
 
 	go func() {
+		// Add a delay of 2 seconds before starting the health checks
+		time.Sleep(2 * time.Second)
 		for {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()

@@ -137,7 +137,13 @@ app:
   health_check_path: "/healthz"
 ```
 
-### Step 4: Run the Docker Container
+### Step 4:  Kafka ACLs Required
+
+The `kafka-lag-go` application requires certain permissions to interact with Kafka and perform operations like fetching metadata, reading consumer group offsets, and describing topics. To ensure secure communication and limited access, appropriate **Access Control Lists (ACLs)** need to be applied. These permissions are necessary for the application to gather the metrics and information it needs from Kafka.
+
+For detailed instructions on how to set up these ACLs, please refer to the [ACLs Documentation](docs/ACLs.md).
+
+### Step 5: Run the Docker Container
 
 After building the image and preparing the configuration file, run the Kafka Lag Monitor Docker container:
 
@@ -148,7 +154,7 @@ docker run --rm -v /path/to/config.yaml:/app/config.yaml kafka-lag-monitor:lates
 Replace `/path/to/config.yaml` with the actual path to your configuration file.
 
 
-### Downlaod the image 
+### (Or) Downlaod the image 
 Kafka Lag Calculator is available as a Docker image, making it easy to deploy in containerized environments like Kubernetes.
 You can download the Docker image from Docker Hub using the following command:
 ```
