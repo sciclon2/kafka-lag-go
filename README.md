@@ -165,7 +165,7 @@ app:
   health_check_path: "/healthz"
 ```
 
-### Step 4:  Kafka ACLs Required
+### Step 4: Kafka ACLs Required
 
 The `kafka-lag-go` application requires certain permissions to interact with Kafka and perform operations like fetching metadata, reading consumer group offsets, and describing topics. To ensure secure communication and limited access, appropriate **Access Control Lists (ACLs)** need to be applied. These permissions are necessary for the application to gather the metrics and information it needs from Kafka.
 
