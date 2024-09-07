@@ -1,3 +1,31 @@
+## Table of Contents
+
+1. [Kafka Lag Go](#kafka-lag-go)
+2. [Features](#features)
+3. [Architecture Overview](#architecture-overview)
+4. [Performance](#performance)
+    1. [Prerequisites](#prerequisites)
+    2. [Platform Compatibility](#platform-compatibility)
+5. [Installation](#installation)
+6. [Deployment Options](#deployment-options)
+    1. [Step 1: Clone the Repository](#step-1-clone-the-repository)
+    2. [Step 2: Build the Docker Image](#step-2-build-the-docker-image)
+    3. [Step 3: Prepare the Configuration File](#step-3-prepare-the-configuration-file)
+    4. [Step 4: Kafka ACLs Required](#step-4-kafka-acls-required)
+    5. [Step 5: Run the Docker Container](#step-5-run-the-docker-container)
+7. [Configuration](#configuration)
+    1. [Prometheus Metrics](#prometheus-metrics)
+    2. [Kafka Clusters](#kafka-clusters)
+    3. [Storage Configuration](#storage-configuration)
+    4. [Application Settings](#application-settings)
+8. [Running Unit and End-to-End (E2E) Tests](#running-unit-and-end-to-end-e2e-tests)
+    1. [Unit Tests](#unit-tests)
+    2. [End-to-End (E2E) Tests](#end-to-end-e2e-tests)
+9. [Health Check Feature](#health-check-feature)
+10. [Prometheus Metrics](#prometheus-metrics-overview)
+11. [Next Steps](#next-steps)
+12. [License](#license)
+
 # Kafka Lag Go
 
 Kafka Lag Go is a lightweight, stateless application designed to calculate Kafka consumer group lag in both offsets and seconds. It efficiently processes Kafka consumer group data using a pipeline pattern implemented with Go’s goroutines and channels, ensuring high performance and scalability. The application employs consistent hashing to distribute work evenly among multiple nodes, making it suitable for deployment in distributed environments.
@@ -206,7 +234,36 @@ The Kafka Lag Monitor requires a YAML configuration file to customize its behavi
 
 Please refer to the `config.go` file for more details on each configuration option.
 
+## Running Unit and End-to-End (E2E) Tests
 
+### Unit Tests
+
+We ensure code quality and functionality with a comprehensive suite of unit tests. These can be run locally on your laptop using the following command:
+
+```bash
+go test ./... -v -cover -count=1
+```
+
+- `-v`: Enables verbose output, providing detailed information about which tests are running.
+- `-cover`: Generates a coverage report, showing how much of the code is covered by the tests.
+- `-count=1`: Disables test result caching, ensuring that the tests run fresh every time.
+
+### End-to-End (E2E) Tests
+
+For E2E tests, we simulate the full system, including Kafka, storage (Redis in this case), and compile the `kafka-lag-go` binary. You can run the E2E tests using the provided script:
+
+```bash
+test/e2e/run.sh
+```
+
+This script will:
+1. Create the necessary infrastructure, including Kafka and Redis.
+2. Compile the `kafka-lag-go` binary.
+3. Execute the end-to-end tests to verify the system's behavior under real conditions.
+
+The E2E test script is designed to handle cleanup automatically. Whether the tests pass or fail, the script will catch the signal and ensure that the Docker Compose environment is properly cleaned up after the tests have finished.
+
+Make sure you have Docker installed and running, as it is used to set up the test environment.
 
 ## Health Check Feature
 
