@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/redis/go-redis/v9"
@@ -37,9 +38,12 @@ func (lp *LagProcessor) processGroup(group *structs.Group) {
 	// Set the group's sum values
 	lp.updateGroupSums(group, tempSumLagInOffsets, tempSumLagInSeconds, validOffsetsFound, validSecondsFound)
 
-	logrus.Infof("Finished processing group in cluster: %s, Group: %s, MaxLagInOffsets: %d, MaxLagInSeconds: %d, SumLagInOffsets: %d, SumLagInSeconds: %d",
-		group.ClusterName, group.Name, group.MaxLagInOffsets, group.MaxLagInSeconds, group.SumLagInOffsets, group.SumLagInSeconds)
+	// Use the helper function to get the concatenated topic names
+	topicList := concatenateTopicNames(group)
 
+	// Include the topics in the log message
+	logrus.Infof("Finished processing group in cluster: %s, Group: %s, MaxLagInOffsets: %d, MaxLagInSeconds: %d, SumLagInOffsets: %d, SumLagInSeconds: %d, Topics: [%s]",
+		group.ClusterName, group.Name, group.MaxLagInOffsets, group.MaxLagInSeconds, group.SumLagInOffsets, group.SumLagInSeconds, topicList)
 }
 
 func (lp *LagProcessor) processTopic(topic *structs.Topic, group *structs.Group, tempSumLagInOffsets, tempSumLagInSeconds *int64, validOffsetsFound, validSecondsFound *bool) {
@@ -332,4 +336,13 @@ func (lp *LagProcessor) GenerateMetrics(groupsComplete <-chan *structs.Group, nu
 	}()
 
 	return metricsToExportChan
+}
+
+// concatenateTopicNames takes a group and returns a concatenated string of topic names.
+func concatenateTopicNames(group *structs.Group) string {
+	var topicNames []string
+	for _, topic := range group.Topics {
+		topicNames = append(topicNames, topic.Name)
+	}
+	return strings.Join(topicNames, ", ")
 }
