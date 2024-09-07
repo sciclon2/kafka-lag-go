@@ -104,6 +104,6 @@ func InitializeSignalHandling() chan os.Signal {
 // initializeAndStartHeartbeat initializes the ApplicationHeartbeat and starts the health check routine.
 func InitializeAndStartHealthcheck(kafkaAdmins map[string]structs.KafkaAdmin, store storage.Storage, interval time.Duration, cfg *config.Config) *healthcheck.ApplicationHealthchech {
 	applicationHeartbeat := healthcheck.NewApplicationHealthcheck(kafkaAdmins, store, interval, cfg.App.HealthCheckPort, cfg.App.HealthCheckPath)
-	applicationHeartbeat.Start()
+	applicationHeartbeat.Start(3 * time.Second)
 	return applicationHeartbeat
 }

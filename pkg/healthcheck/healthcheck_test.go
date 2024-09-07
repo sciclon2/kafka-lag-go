@@ -206,11 +206,11 @@ func TestStart_Healthy(t *testing.T) {
 	// Create a new ApplicationHealthcheck instance
 	ah := NewApplicationHealthcheck(kafkaAdmins, mockStorage, time.Second, 8080, "/health")
 
-	// Run the health check logic in the background
-	go ah.Start()
+	// Run the health check logic in the background with a delay of 1 second
+	go ah.Start(1 * time.Second)
 
-	// Simulate a brief delay to allow checks to run
-	time.Sleep(500 * time.Millisecond)
+	// Simulate a delay to allow the full delay to pass and checks to run
+	time.Sleep(2*time.Second + 500*time.Millisecond)
 
 	// Create a request to the health check handler
 	req, err := http.NewRequest("GET", "/health", nil)

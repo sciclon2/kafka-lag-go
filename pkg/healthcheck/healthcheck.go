@@ -75,7 +75,7 @@ func NewApplicationHealthcheck(kafkaAdmins map[string]structs.KafkaAdmin, store 
 	}
 }
 
-func (ah *ApplicationHealthchech) Start() {
+func (ah *ApplicationHealthchech) Start(initialDelay time.Duration) {
 	// Create a new ServeMux for health checks
 	healthMux := http.NewServeMux()
 	healthMux.HandleFunc(ah.HealthCheckPath, ah.HealthCheckHandler)
@@ -90,8 +90,8 @@ func (ah *ApplicationHealthchech) Start() {
 	}()
 
 	go func() {
-		// Add a delay of 2 seconds before starting the health checks
-		time.Sleep(2 * time.Second)
+		// Use the provided initial delay before starting the health checks
+		time.Sleep(initialDelay)
 		for {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
