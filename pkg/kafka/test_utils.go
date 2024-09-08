@@ -32,12 +32,6 @@ func (m *MockKafkaClient) Topics() ([]string, error) {
 	return args.Get(0).([]string), args.Error(1)
 }
 
-// Partitions mocks the Partitions method.
-func (m *MockKafkaClient) Partitions(topic string) ([]int32, error) {
-	args := m.Called(topic)
-	return args.Get(0).([]int32), args.Error(1)
-}
-
 // GetOffset mocks the GetOffset method.
 func (m *MockKafkaClient) GetOffset(topic string, partition int32, time int64) (int64, error) {
 	args := m.Called(topic, partition, time)
@@ -47,12 +41,6 @@ func (m *MockKafkaClient) GetOffset(topic string, partition int32, time int64) (
 func (m *MockKafkaClient) Leader(topic string, partition int32) (*sarama.Broker, error) {
 	args := m.Called(topic, partition)
 	return args.Get(0).(*sarama.Broker), args.Error(1)
-}
-
-// Replicas mocks the Replicas method.
-func (m *MockKafkaClient) Replicas(topic string, partition int32) ([]int32, error) {
-	args := m.Called(topic, partition)
-	return args.Get(0).([]int32), args.Error(1)
 }
 
 // RefreshMetadata mocks the RefreshMetadata method.

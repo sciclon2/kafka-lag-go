@@ -33,11 +33,8 @@ The Kafka client interface requires the following permissions:
 | Operation                  | Permission  | Resource Type | Description                                                        |
 |----------------------------|-------------|---------------|--------------------------------------------------------------------|
 | **Brokers()**               | DESCRIBE    | Cluster       | Allows fetching metadata of brokers.                               |
-| **Topics()**                | DESCRIBE    | Topic         | Allows listing and describing available topics.                    |
-| **Partitions()**            | DESCRIBE    | Topic         | Allows describing partitions within a topic.                       |
 | **GetOffset()**             | DESCRIBE/READ | Topic       | Allows fetching offsets for specific topic partitions.             |
 | **Leader()**                | DESCRIBE    | Topic         | Allows describing the leader broker for a partition in a topic.    |
-| **Replicas()**              | DESCRIBE    | Topic         | Allows retrieving replica details for a partition in a topic.      |
 | **RefreshMetadata()**       | DESCRIBE    | Topic         | Allows refreshing metadata for specific topics.                    |
 
 ### Kafka Admin Permissions
@@ -65,6 +62,7 @@ kafka-acls --bootstrap-server kafka-broker:9092 \
   --operation DESCRIBE --cluster
 ```
 
+
 ### Topic Level ACLs
 To allow the application to describe topics, fetch offsets, and perform operations on partitions, apply the following ACLs for topics:
 
@@ -76,7 +74,7 @@ kafka-acls --bootstrap-server kafka-broker:9092 \
   --operation READ --topic '*'
 ```
 
-### Group Level ACLs
+### Group Level ACLs    
 The following ACLs allow kafka-lag-go to list and fetch offsets for consumer groups:
 
 ```bash

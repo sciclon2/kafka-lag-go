@@ -9,11 +9,8 @@ import (
 type KafkaClient interface {
 	//Brokers() []KafkaBrokerInterface
 	Brokers() []*sarama.Broker
-	Topics() ([]string, error)
-	Partitions(topic string) ([]int32, error)
 	GetOffset(topic string, partition int32, time int64) (int64, error)
 	Leader(topic string, partition int32) (*sarama.Broker, error)
-	Replicas(topic string, partition int32) ([]int32, error)
 	RefreshMetadata(topics ...string) error
 	Close() error
 }
@@ -88,14 +85,6 @@ func (s *SaramaKafkaClient) Brokers() []*sarama.Broker {
 	return s.Client.Brokers()
 }
 
-func (s *SaramaKafkaClient) Topics() ([]string, error) {
-	return s.Client.Topics()
-}
-
-func (s *SaramaKafkaClient) Partitions(topic string) ([]int32, error) {
-	return s.Client.Partitions(topic)
-}
-
 // Close closes the sarama.Client and implements the Close method for KafkaClient.
 func (s *SaramaKafkaClient) Close() error {
 	return s.Client.Close()
@@ -109,11 +98,6 @@ func (s *SaramaKafkaClient) GetOffset(topic string, partition int32, time int64)
 // Implement the missing Leader method
 func (s *SaramaKafkaClient) Leader(topic string, partition int32) (*sarama.Broker, error) {
 	return s.Client.Leader(topic, partition)
-}
-
-// Replicas implements KafkaClient.Replicas
-func (s *SaramaKafkaClient) Replicas(topic string, partition int32) ([]int32, error) {
-	return s.Client.Replicas(topic, partition)
 }
 
 // Implement the missing RefreshMetadata method
