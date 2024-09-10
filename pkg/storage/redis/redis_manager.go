@@ -43,7 +43,6 @@ func NewRedisManager(ctx context.Context, client RedisClient, cfg *config.Config
 	}
 
 	ctx, cancelFunc := context.WithCancel(ctx)
-
 	return &RedisManager{
 		client:     client,
 		ctx:        ctx,

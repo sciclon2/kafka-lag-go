@@ -15,11 +15,11 @@ import (
 func TestNewRedisManager_Success(t *testing.T) {
 	ctx := context.Background()
 
-	mockClient := createMockRedisClient()
+	mockClient := CreateMockRedisClient()
 	mockLuaScript := "return redis.call('set', KEYS[1], ARGV[1])"
 	mockClient.On("ScriptLoad", ctx, mockLuaScript).Return(redis.NewStringResult("mockSHA", nil))
 
-	cfg := defaultRedisConfig()
+	cfg := DefaultRedisConfig()
 
 	manager, err := NewRedisManager(ctx, mockClient, cfg, mockLuaScript)
 	assert.NoError(t, err)
@@ -32,11 +32,11 @@ func TestNewRedisManager_Success(t *testing.T) {
 func TestNewRedisManager_FailScriptLoad(t *testing.T) {
 	ctx := context.Background()
 
-	mockClient := createMockRedisClient()
+	mockClient := CreateMockRedisClient()
 	mockLuaScript := "return redis.call('set', KEYS[1], ARGV[1])"
 	mockClient.On("ScriptLoad", ctx, mockLuaScript).Return(redis.NewStringResult("", fmt.Errorf("failed to load script")))
 
-	cfg := defaultRedisConfig()
+	cfg := DefaultRedisConfig()
 
 	manager, err := NewRedisManager(ctx, mockClient, cfg, mockLuaScript)
 	assert.Error(t, err)
@@ -49,11 +49,11 @@ func TestNewRedisManager_FailScriptLoad(t *testing.T) {
 func TestNewRedisManager_EmptySHA(t *testing.T) {
 	ctx := context.Background()
 
-	mockClient := createMockRedisClient()
+	mockClient := CreateMockRedisClient()
 	mockLuaScript := "return redis.call('set', KEYS[1], ARGV[1])"
 	mockClient.On("ScriptLoad", ctx, mockLuaScript).Return(redis.NewStringResult("", nil))
 
-	cfg := defaultRedisConfig()
+	cfg := DefaultRedisConfig()
 
 	manager, err := NewRedisManager(ctx, mockClient, cfg, mockLuaScript)
 	assert.NoError(t, err)
@@ -69,7 +69,7 @@ func TestRedisManager_GracefulStop_Success(t *testing.T) {
 		// Simulate canceling the context
 	}
 
-	mockClient := createMockRedisClient()
+	mockClient := CreateMockRedisClient()
 	mockClient.On("Close").Return(nil)
 
 	// Initialize the RedisManager with the mock client and a cancel function
@@ -102,7 +102,7 @@ func TestRedisManager_GracefulStop_CloseError(t *testing.T) {
 	}
 
 	// Create a mock Redis client
-	mockClient := createMockRedisClient()
+	mockClient := CreateMockRedisClient()
 	closeError := fmt.Errorf("close error")
 	mockClient.On("Close").Return(closeError)
 

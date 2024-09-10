@@ -12,7 +12,7 @@ import (
 )
 
 func TestPersistLatestProducedOffsets(t *testing.T) {
-	mockRedisClient := createMockRedisClient()
+	mockRedisClient := CreateMockRedisClient()
 	mockPipeliner := new(MockPipeliner)
 
 	// Set up the mock Redis client to return a mock Pipeliner
@@ -86,7 +86,7 @@ func TestPersistLatestProducedOffsets(t *testing.T) {
 }
 
 func TestPersistLatestProducedOffsetsWithCompression(t *testing.T) {
-	mockRedisClient := createMockRedisClient()
+	mockRedisClient := CreateMockRedisClient()
 	mockPipeliner := new(MockPipeliner)
 
 	// Set up the mock Redis client to return a mock Pipeliner
@@ -161,7 +161,7 @@ func TestPersistLatestProducedOffsetsWithCompression(t *testing.T) {
 }
 
 func TestPersistLatestProducedOffsetsMultipleClusters(t *testing.T) {
-	mockRedisClient := createMockRedisClient()
+	mockRedisClient := CreateMockRedisClient()
 	mockPipeliner := new(MockPipeliner)
 
 	// Set up the mock Redis client to return a mock Pipeliner
