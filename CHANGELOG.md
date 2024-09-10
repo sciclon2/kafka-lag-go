@@ -1,6 +1,19 @@
 # Changelog
 
-## [v2.0.1] - Minor improvements (Latest)
+
+## [v2.0.2] - Redis Authentication, Authorization, and TLS Support (10th Sept 2024)
+
+### Feat
+- **Redis AuthN/AuthZ and TLS Support**: Added support for Redis authentication (AuthN) and authorization (AuthZ) using ACLs (available from Redis 6.0+). This enables users to provide usernames and passwords for secure access to Redis instances.
+- **Redis TLS Support**: Introduced TLS encryption for Redis connections, allowing secure communication between Kafka Lag Go and Redis clusters.
+- **Backward Compatibility**: These features maintain full backward compatibility, supporting unsecured Redis instances for users who prefer non-encrypted connections.
+
+### Documentation
+- **Redis Setup Guide**: Updated the Redis documentation to include configuration examples for setting up authentication, authorization, and TLS.
+
+---
+
+# [v2.0.1] - Minor improvements (Latest)
 
 ### Feat
 - **Logging Enhancements**: Improved both debug and info log levels for better visibility, including additional context such as `clusterName` in the logs.
