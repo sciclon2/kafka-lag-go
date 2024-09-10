@@ -25,14 +25,8 @@ type Config struct {
 	} `yaml:"prometheus"`
 	KafkaClusters []KafkaCluster `yaml:"kafka_clusters"`
 	Storage       struct {
-		Type  string `yaml:"type"` // e.g., "redis", "mysql" (for future use)
-		Redis struct {
-			Address              string `yaml:"address"`
-			Port                 int    `yaml:"port"`
-			ClientRequestTimeout string `yaml:"client_request_timeout"`
-			ClientIdleTimeout    string `yaml:"client_idle_timeout"`
-			RetentionTTLSeconds  int    `yaml:"retention_ttl_seconds"`
-		} `yaml:"redis"`
+		Type  string      `yaml:"type"` // e.g., "redis", "mysql" (for future use)
+		Redis RedisConfig `yaml:"redis"`
 	} `yaml:"storage"`
 	App struct {
 		IterationInterval string `yaml:"iteration_interval"`
@@ -41,6 +35,24 @@ type Config struct {
 		HealthCheckPort   int    `yaml:"health_check_port"`
 		HealthCheckPath   string `yaml:"health_check_path"`
 	} `yaml:"app"`
+}
+
+// RedisConfig holds Redis-related configurations
+type RedisConfig struct {
+	Address              string     `yaml:"address"`
+	Port                 int        `yaml:"port"`
+	ClientRequestTimeout string     `yaml:"client_request_timeout"`
+	ClientIdleTimeout    string     `yaml:"client_idle_timeout"`
+	RetentionTTLSeconds  int        `yaml:"retention_ttl_seconds"`
+	Auth                 AuthConfig `yaml:"auth"`
+	SSL                  SSLConfig  `yaml:"ssl"`
+}
+
+// AuthConfig holds authentication-related settings (for Redis ACL on Redis)
+type AuthConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	Username string `yaml:"username,omitempty"` // Redis ACL username (optional)
+	Password string `yaml:"password,omitempty"` // Redis ACL password (optional)
 }
 
 // KafkaCluster represents the configuration for a single Kafka cluster
@@ -66,6 +78,7 @@ type SSLConfig struct {
 	ClientCertificateFile string `yaml:"client_certificate_file"`
 	ClientKeyFile         string `yaml:"client_key_file"`
 	InsecureSkipVerify    bool   `yaml:"insecure_skip_verify"`
+	CACertFile            string `yaml:"ca_cert_file,omitempty"`
 }
 
 // SASLConfig represents the SASL settings for Kafka
@@ -175,6 +188,15 @@ func setDefaults(config *Config) {
 	if config.Storage.Redis.ClientIdleTimeout == "" {
 		config.Storage.Redis.ClientIdleTimeout = "5m"
 	}
+	if !config.Storage.Redis.Auth.Enabled {
+		config.Storage.Redis.Auth.Enabled = false
+	}
+	if !config.Storage.Redis.SSL.Enabled {
+		config.Storage.Redis.SSL.Enabled = false
+	}
+	if config.Storage.Redis.SSL.Enabled && !config.Storage.Redis.SSL.InsecureSkipVerify {
+		config.Storage.Redis.SSL.InsecureSkipVerify = true
+	}
 	if config.App.IterationInterval == "" {
 		config.App.IterationInterval = "30s"
 	}
@@ -254,6 +276,12 @@ func validateConfig(config *Config) error {
 		}
 		if config.Storage.Redis.RetentionTTLSeconds < 3600 {
 			return errors.New("redis retention_ttl_seconds must be greater than 3600 seconds")
+		}
+		// If authentication is enabled, ensure username and password are provided
+		if config.Storage.Redis.Auth.Enabled {
+			if config.Storage.Redis.Auth.Username == "" || config.Storage.Redis.Auth.Password == "" {
+				return errors.New("redis auth enabled, but username or password is missing")
+			}
 		}
 	} else {
 		// For now, we only support Redis

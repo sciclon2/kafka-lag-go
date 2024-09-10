@@ -51,8 +51,6 @@ func (rm *RedisManager) PersistLatestProducedOffsets(groupsWithLeaderInfoAndLead
 	return groupsComplete
 }
 
-//groupsWithLeaderInfoAndLeaderOffsetsChan
-
 // processAndPersistGroup is a helper function that processes a group and persists its data to Redis.
 func (rm *RedisManager) addNewProducedOffsets(group *structs.Group) error {
 	pipe := rm.client.Pipeline()
@@ -65,15 +63,13 @@ func (rm *RedisManager) addNewProducedOffsets(group *structs.Group) error {
 			}
 
 			redisKey := fmt.Sprintf("%s:%s:%d", group.ClusterName, topic.Name, partition.Number)
-			args := []interface{}{
-				redisKey,                       // The Redis key for the ZSET
-				partition.LatestProducedOffset, // The offset to add
-				fmt.Sprintf("%d", partition.LatestProducedOffsetAt), // The timestamp for the new latest produced offset
-				rm.TTLSeconds,
-				20, // Cleanup probability (20%)
-			}
 
-			pipe.EvalSha(rm.ctx, rm.LuaSHA, []string{"add_latest_produced_offset"}, args...)
+			pipe.EvalSha(rm.ctx, rm.LuaSHA, []string{redisKey}, // Pass redisKey as KEYS[1]
+				"add_latest_produced_offset",                        // Operation
+				partition.LatestProducedOffset,                      // Offset
+				fmt.Sprintf("%d", partition.LatestProducedOffsetAt), // Timestamp
+				rm.TTLSeconds, // TTL in seconds
+				20)            // Cleanup probability
 		}
 	}
 
