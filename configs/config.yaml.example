@@ -46,6 +46,14 @@ storage:
     client_request_timeout: "60s"
     client_idle_timeout: "5m"
     retention_ttl_seconds: 7200  # TTL for Redis keys (in seconds)
+    auth:
+      enabled: true               # Redis ACL support enabled
+      username: "redisUser"       # Redis ACL username
+      password: "redisPassword"   # Redis ACL password
+    ssl:
+      enabled: true
+      insecure_skip_verify: false  # Enable Redis TLS, with verification of server certificate
+      ca_cert_file: "/path/to/ca-cert.pem"  # Optional: CA certificate for Redis TLS
 
 app:
   iteration_interval: "30s"    # Time interval between each iteration

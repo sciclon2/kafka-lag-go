@@ -12,7 +12,8 @@
     2. [Step 2: Build the Docker Image](#step-2-build-the-docker-image)
     3. [Step 3: Prepare the Configuration File](#step-3-prepare-the-configuration-file)
     4. [Step 4: Kafka ACLs Required](#step-4-kafka-acls-required)
-    5. [Step 5: Run the Docker Container](#step-5-run-the-docker-container)
+    5. [Step 4: Set up Redis](#step-5-set-up-redis)
+    6. [Step 5: Run the Docker Container](#step-5-run-the-docker-container)
 7. [Configuration](#configuration)
 8. [Running Unit and End-to-End (E2E) Tests](#running-unit-and-end-to-end-e2e-tests)
     1. [Unit Tests](#unit-tests)
@@ -152,6 +153,13 @@ storage:
     client_request_timeout: "60s"
     client_idle_timeout: "5m"
     retention_ttl_seconds: 7200
+    auth:
+      enabled: true
+      username: "redisUser"
+      password: "redisPassword"
+    ssl:
+      enabled: true
+      insecure_skip_verify: true
 
 app:
   iteration_interval: "30s"
@@ -166,6 +174,16 @@ app:
 The `kafka-lag-go` application requires certain permissions to interact with Kafka and perform operations like fetching metadata, reading consumer group offsets, and describing topics. To ensure secure communication and limited access, appropriate **Access Control Lists (ACLs)** need to be applied. These permissions are necessary for the application to gather the metrics and information it needs from Kafka.
 
 For detailed instructions on how to set up these ACLs, please refer to the [ACLs Documentation](docs/ACLs.md).
+
+### Step 5: Set up Redis
+
+To configure Redis for Kafka Lag Go, ensure your Redis server is properly set up. Kafka Lag Go supports authentication, authorization (ACL), and TLS for secure connections starting with Redis version 6.0.
+
+- **Basic Setup**: If using Redis without authentication or encryption, you only need to provide the Redis address and port in the configuration file.
+- **Advanced Setup**: For more secure environments, you can enable Redis authentication, ACLs, and TLS in the configuration.
+
+For detailed steps on setting up Redis with these features, please refer to [the Redis setup documentation](docs/Redis.md).
+
 
 ### Step 5: Run the Docker Container
 
@@ -193,7 +211,7 @@ The Kafka Lag Monitor requires a YAML configuration file to customize its behavi
 - **Prometheus Metrics**:
   - `prometheus.metrics_port`: The port on which Prometheus metrics will be exposed.
   - `prometheus.labels`: Additional labels to be attached to the exported metrics.
-  
+
 - **Kafka Clusters**:
   - `kafka_clusters`: An array of Kafka cluster configurations, each with the following options:
     - `name`: The name of the Kafka cluster.
@@ -215,11 +233,19 @@ The Kafka Lag Monitor requires a YAML configuration file to customize its behavi
 
 - **Storage Configuration**:
   - `storage.type`: The type of storage backend to use (e.g., `redis`).
-  - `storage.redis.address`: The address of the Redis server for Redis storage.
-  - `storage.redis.port`: The port of the Redis server for Redis storage.
-  - `storage.redis.client_request_timeout`: The timeout for Redis client requests.
-  - `storage.redis.client_idle_timeout`: The idle timeout for Redis clients.
-  - `storage.redis.retention_ttl_seconds`: The time-to-live (TTL) for Redis keys.
+  - **Redis Settings**:
+    - `storage.redis.address`: The address of the Redis server for Redis storage.
+    - `storage.redis.port`: The port of the Redis server for Redis storage.
+    - `storage.redis.client_request_timeout`: The timeout for Redis client requests.
+    - `storage.redis.client_idle_timeout`: The idle timeout for Redis clients.
+    - `storage.redis.retention_ttl_seconds`: The time-to-live (TTL) for Redis keys.
+    - **Auth Settings (Redis 6.0+ support)**:
+      - `storage.redis.auth.enabled`: Whether authentication is enabled for Redis.
+      - `storage.redis.auth.username`: The username for Redis authentication.
+      - `storage.redis.auth.password`: The password for Redis authentication.
+    - **SSL Settings**:
+      - `storage.redis.ssl.enabled`: Whether TLS encryption is enabled for Redis connections.
+      - `storage.redis.ssl.insecure_skip_verify`: Whether to skip TLS verification.
 
 - **Application Settings**:
   - `app.iteration_interval`: The interval at which the lag monitor iterates over consumer groups.

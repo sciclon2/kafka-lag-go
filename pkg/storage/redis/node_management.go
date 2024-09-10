@@ -12,10 +12,20 @@ func (rm *RedisManager) RegisterNode(nodeID string, ttl int) (int, error) {
 	return rm.refreshNode(nodeID, ttl)
 }
 
-// DeregisterNode deregisters a node by its ID using the Lua script.
-// This function ensures that the node is properly deregistered from Redis.
 func (rm *RedisManager) DeregisterNode(nodeID string) error {
-	_, err := rm.client.EvalSha(rm.ctx, rm.LuaSHA, []string{"deregister"}, nodeID).Result()
+	// Create a key with a hash tag to ensure consistent Redis slot usage
+	nodeKey := "{" + rm.NodeTag + "}:" + nodeID
+	nodeList := "{" + rm.NodeTag + "}:active_nodes" // Node list as a parameter
+
+	// Execute the Lua script with the hash-tagged node key and node list
+	_, err := rm.client.EvalSha(
+		rm.ctx,
+		rm.LuaSHA,
+		[]string{nodeKey}, // Pass nodeKey as the key
+		"deregister",      // Operation
+		nodeList,          // Node list passed as a parameter
+	).Result()
+
 	if err != nil {
 		return fmt.Errorf("error executing Lua script for deregistration: %v", err)
 	}
@@ -23,7 +33,20 @@ func (rm *RedisManager) DeregisterNode(nodeID string) error {
 }
 
 func (rm *RedisManager) refreshNode(nodeID string, ttl int) (int, error) {
-	result, err := rm.client.EvalSha(rm.ctx, rm.LuaSHA, []string{"register_or_refresh"}, nodeID, ttl).Result()
+	// Create the node key and node list with the hash tag
+	nodeKey := "{" + rm.NodeTag + "}:" + nodeID     // Unique node key
+	nodeList := "{" + rm.NodeTag + "}:active_nodes" // Node list passed as parameter
+
+	// Execute the Lua script
+	result, err := rm.client.EvalSha(
+		rm.ctx,
+		rm.LuaSHA,
+		[]string{nodeKey},     // Pass only the node key as KEYS
+		"register_or_refresh", // Operation type passed as parameter
+		nodeList,              // Node list passed as parameter
+		ttl,                   // TTL value
+	).Result()
+
 	if err != nil {
 		return -1, fmt.Errorf("error executing Lua script: %v", err)
 	}
@@ -38,9 +61,20 @@ func (rm *RedisManager) refreshNode(nodeID string, ttl int) (int, error) {
 	return int(nodeIndex), nil
 }
 
-// GetNodeInfo retrieves information about a node, such as its index and the total number of nodes.
 func (rm *RedisManager) GetNodeInfo(nodeID string) (int, int, error) {
-	result, err := rm.client.EvalSha(rm.ctx, rm.LuaSHA, []string{"get_node_info"}, nodeID).Result()
+	// Create a key with a hash tag to ensure consistent Redis slot usage
+	nodeKey := "{" + rm.NodeTag + "}:" + nodeID
+	nodeList := "{" + rm.NodeTag + "}:active_nodes"
+
+	// Execute the Lua script with the hash-tagged node key and node list
+	result, err := rm.client.EvalSha(
+		rm.ctx,
+		rm.LuaSHA,
+		[]string{nodeKey}, // Pass nodeKey as the key
+		"get_node_info",   // Operation
+		nodeList,          // Node list passed as a parameter
+	).Result()
+
 	if err != nil {
 		return -1, -1, fmt.Errorf("error executing Lua script for getting node info: %v", err)
 	}
@@ -123,9 +157,19 @@ func (rm *RedisManager) StartNodeMonitoring(monitorInterval time.Duration) {
 }
 
 func (rm *RedisManager) monitorNodes() ([]string, error) {
-	result, err := rm.client.EvalSha(rm.ctx, rm.LuaSHA, []string{"monitor"}).Result()
+	// Create the node list with the hash tag to ensure consistent Redis slot usage
+	nodeList := "{" + rm.NodeTag + "}:active_nodes"
+
+	// Execute the Lua script with the tagged node list and operation "monitor"
+	result, err := rm.client.EvalSha(
+		rm.ctx,
+		rm.LuaSHA,
+		[]string{nodeList}, // No keys needed, we pass everything as parameters
+		"monitor",          // Operation
+	).Result()
+
 	if err != nil {
-		return nil, fmt.Errorf("error executing Lua script for monitor nodes: %v", err)
+		return nil, fmt.Errorf("error executing Lua script for monitoring nodes: %v", err)
 	}
 
 	failedNodes, ok := result.([]interface{})

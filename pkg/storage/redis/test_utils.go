@@ -9,31 +9,29 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// defaultRedisConfig returns a standard Redis configuration.
+// defaultRedisConfig initializes the Config struct with default Redis values
 func defaultRedisConfig() *config.Config {
 	return &config.Config{
 		Storage: struct {
-			Type  string `yaml:"type"`
-			Redis struct {
-				Address              string `yaml:"address"`
-				Port                 int    `yaml:"port"`
-				ClientRequestTimeout string `yaml:"client_request_timeout"`
-				ClientIdleTimeout    string `yaml:"client_idle_timeout"`
-				RetentionTTLSeconds  int    `yaml:"retention_ttl_seconds"`
-			} `yaml:"redis"`
+			Type  string             `yaml:"type"`
+			Redis config.RedisConfig `yaml:"redis"`
 		}{
 			Type: "redis",
-			Redis: struct {
-				Address              string `yaml:"address"`
-				Port                 int    `yaml:"port"`
-				ClientRequestTimeout string `yaml:"client_request_timeout"`
-				ClientIdleTimeout    string `yaml:"client_idle_timeout"`
-				RetentionTTLSeconds  int    `yaml:"retention_ttl_seconds"`
-			}{
+			Redis: config.RedisConfig{
 				Address:              "localhost",
 				Port:                 6379,
 				ClientRequestTimeout: "5s",
 				ClientIdleTimeout:    "5m",
+				RetentionTTLSeconds:  7200, // Default to 2 hours
+				Auth: config.AuthConfig{
+					Enabled:  false, // Default: no authentication
+					Username: "",
+					Password: "",
+				},
+				SSL: config.SSLConfig{
+					Enabled:            false, // Default: SSL disabled
+					InsecureSkipVerify: false,
+				},
 			},
 		},
 	}
