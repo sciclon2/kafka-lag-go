@@ -17,7 +17,7 @@ import (
 
 func TestRegisterNode_Success(t *testing.T) {
 	ctx := context.Background()
-	mockClient := createMockRedisClient()
+	mockClient := CreateMockRedisClient()
 
 	nodeID := "node"
 	ttl := 60
@@ -47,7 +47,7 @@ func TestRegisterNode_Success(t *testing.T) {
 
 func TestRegisterNode_LuaScriptError(t *testing.T) {
 	ctx := context.Background()
-	mockClient := createMockRedisClient()
+	mockClient := CreateMockRedisClient()
 
 	nodeID := "node"
 	ttl := 60
@@ -80,7 +80,7 @@ func TestRegisterNode_LuaScriptError(t *testing.T) {
 
 func TestRegisterNode_UnexpectedResultFormat(t *testing.T) {
 	ctx := context.Background()
-	mockClient := createMockRedisClient()
+	mockClient := CreateMockRedisClient()
 
 	nodeID := "node"
 	ttl := 60
@@ -112,7 +112,7 @@ func TestRegisterNode_UnexpectedResultFormat(t *testing.T) {
 
 func TestDeregisterNode_LuaScriptError(t *testing.T) {
 	ctx := context.Background()
-	mockClient := createMockRedisClient()
+	mockClient := CreateMockRedisClient()
 
 	nodeID := "node1"
 	expectedError := fmt.Errorf("Lua script execution error")
@@ -144,7 +144,7 @@ func TestDeregisterNode_LuaScriptError(t *testing.T) {
 
 func TestDeregisterNode_Success(t *testing.T) {
 	ctx := context.Background()
-	mockClient := createMockRedisClient()
+	mockClient := CreateMockRedisClient()
 
 	nodeID := "node"
 	// Ensure nodeKey and nodeList use the hash tag
@@ -171,7 +171,7 @@ func TestDeregisterNode_Success(t *testing.T) {
 }
 func TestGetNodeInfo_Success(t *testing.T) {
 	ctx := context.Background()
-	mockClient := createMockRedisClient()
+	mockClient := CreateMockRedisClient()
 
 	nodeID := "node"
 	expectedIndex := int64(1)
@@ -204,7 +204,7 @@ func TestGetNodeInfo_Success(t *testing.T) {
 
 func TestGetNodeInfo_LuaScriptError(t *testing.T) {
 	ctx := context.Background()
-	mockClient := createMockRedisClient()
+	mockClient := CreateMockRedisClient()
 
 	nodeID := "node"
 	expectedError := fmt.Errorf("Lua script error")
@@ -235,7 +235,7 @@ func TestGetNodeInfo_LuaScriptError(t *testing.T) {
 
 func TestGetNodeInfo_NodeNotFound(t *testing.T) {
 	ctx := context.Background()
-	mockClient := createMockRedisClient()
+	mockClient := CreateMockRedisClient()
 
 	nodeID := "node"
 
@@ -264,7 +264,7 @@ func TestGetNodeInfo_NodeNotFound(t *testing.T) {
 
 func TestGetNodeInfo_UnexpectedResultFormat(t *testing.T) {
 	ctx := context.Background()
-	mockClient := createMockRedisClient()
+	mockClient := CreateMockRedisClient()
 
 	nodeID := "node"
 
@@ -293,7 +293,7 @@ func TestGetNodeInfo_UnexpectedResultFormat(t *testing.T) {
 
 func TestStartNodeHeartbeat_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	mockClient := createMockRedisClient()
+	mockClient := CreateMockRedisClient()
 
 	nodeID := "node"
 	ttl := 60
@@ -330,7 +330,7 @@ func TestStartNodeHeartbeat_ContextCancellation(t *testing.T) {
 
 func TestStartNodeHeartbeat_RefreshNodeFails(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	mockClient := createMockRedisClient()
+	mockClient := CreateMockRedisClient()
 
 	nodeID := "node"
 	ttl := 60
@@ -369,7 +369,7 @@ func TestStartNodeMonitoring_LogsFailedNodes(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	mockClient := createMockRedisClient()
+	mockClient := CreateMockRedisClient()
 
 	// Mock EvalSha to simulate the Lua script for monitoring nodes
 	failedNodesResult := []interface{}{"node1", "node2"}
@@ -406,7 +406,7 @@ func TestStartNodeMonitoring_NoFailedNodes(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	mockClient := createMockRedisClient()
+	mockClient := CreateMockRedisClient()
 
 	nodeList := "{node_tag}:active_nodes"
 
@@ -444,7 +444,7 @@ func TestStartNodeMonitoring_LuaScriptError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	mockClient := createMockRedisClient()
+	mockClient := CreateMockRedisClient()
 
 	nodeList := "{node_tag}:active_nodes"
 
@@ -480,7 +480,7 @@ func TestStartNodeMonitoring_LuaScriptError(t *testing.T) {
 func TestStartNodeMonitoring_ImmediateStop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	mockClient := createMockRedisClient()
+	mockClient := CreateMockRedisClient()
 
 	nodeList := "{node_tag}:active_nodes"
 
@@ -511,7 +511,7 @@ func TestStartNodeMonitoring_ImmediateStop(t *testing.T) {
 
 func TestMonitorNodes_Success(t *testing.T) {
 	ctx := context.Background()
-	mockClient := createMockRedisClient()
+	mockClient := CreateMockRedisClient()
 
 	failedNodesResult := []interface{}{"node1", "node2"}
 	nodeList := "{node_tag}:active_nodes"
@@ -536,7 +536,7 @@ func TestMonitorNodes_Success(t *testing.T) {
 
 func TestMonitorNodes_LuaScriptError(t *testing.T) {
 	ctx := context.Background()
-	mockClient := createMockRedisClient()
+	mockClient := CreateMockRedisClient()
 
 	nodeList := "{node_tag}:active_nodes"
 
@@ -561,7 +561,7 @@ func TestMonitorNodes_LuaScriptError(t *testing.T) {
 
 func TestMonitorNodes_InvalidNodeIDType(t *testing.T) {
 	ctx := context.Background()
-	mockClient := createMockRedisClient()
+	mockClient := CreateMockRedisClient()
 
 	invalidNodeIDResult := []interface{}{"node1", 12345}
 	nodeList := "{node_tag}:active_nodes"

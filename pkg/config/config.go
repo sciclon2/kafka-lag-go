@@ -90,6 +90,8 @@ type SASLConfig struct {
 }
 
 // GetConfigFilePath returns the path to the configuration file
+var GetConfigFilePathFunc = GetConfigFilePath
+
 func GetConfigFilePath() string {
 	// Define a command-line flag for the configuration file path, with no default value.
 	configPath := flag.String("config-file", "", "Path to the configuration file")

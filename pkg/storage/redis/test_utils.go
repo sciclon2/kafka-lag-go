@@ -10,7 +10,7 @@ import (
 )
 
 // defaultRedisConfig initializes the Config struct with default Redis values
-func defaultRedisConfig() *config.Config {
+func DefaultRedisConfig() *config.Config {
 	return &config.Config{
 		Storage: struct {
 			Type  string             `yaml:"type"`
@@ -22,14 +22,14 @@ func defaultRedisConfig() *config.Config {
 				Port:                 6379,
 				ClientRequestTimeout: "5s",
 				ClientIdleTimeout:    "5m",
-				RetentionTTLSeconds:  7200, // Default to 2 hours
+				RetentionTTLSeconds:  7200,
 				Auth: config.AuthConfig{
-					Enabled:  false, // Default: no authentication
+					Enabled:  false,
 					Username: "",
 					Password: "",
 				},
 				SSL: config.SSLConfig{
-					Enabled:            false, // Default: SSL disabled
+					Enabled:            false,
 					InsecureSkipVerify: false,
 				},
 			},
@@ -100,7 +100,7 @@ func (m *MockRedisClient) Ping(ctx context.Context) *redis.StatusCmd {
 }
 
 // createMockRedisClient returns a new MockRedisClient instance.
-func createMockRedisClient() *MockRedisClient {
+func CreateMockRedisClient() *MockRedisClient {
 	return new(MockRedisClient)
 }
 
