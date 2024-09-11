@@ -19,12 +19,10 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	Prometheus struct {
-		MetricsPort int               `yaml:"metrics_port"`
-		Labels      map[string]string `yaml:"labels,omitempty"`
-	} `yaml:"prometheus"`
-	KafkaClusters []KafkaCluster `yaml:"kafka_clusters"`
-	Storage       struct {
+	PrometheusLocal       PrometheusLocalConfig       `yaml:"prometheus_local"`
+	PrometheusRemoteWrite PrometheusRemoteWriteConfig `yaml:"prometheus_remote_write"`
+	KafkaClusters         []KafkaCluster              `yaml:"kafka_clusters"`
+	Storage               struct {
 		Type  string      `yaml:"type"` // e.g., "redis", "mysql" (for future use)
 		Redis RedisConfig `yaml:"redis"`
 	} `yaml:"storage"`
@@ -87,6 +85,33 @@ type SASLConfig struct {
 	Mechanism string `yaml:"mechanism"`
 	User      string `yaml:"user"`
 	Password  string `yaml:"password"`
+}
+
+type PrometheusLocalConfig struct {
+	MetricsPort int               `yaml:"metrics_port"`
+	Labels      map[string]string `yaml:"labels,omitempty"`
+}
+
+type PrometheusRemoteWriteConfig struct {
+	Enabled     bool              `yaml:"enabled"`
+	URL         string            `yaml:"url"`
+	Headers     map[string]string `yaml:"headers,omitempty"`      // Optional headers like Authorization
+	Timeout     string            `yaml:"timeout"`                // Timeout duration for pushing metrics
+	BasicAuth   BasicAuthConfig   `yaml:"basic_auth,omitempty"`   // For basic auth
+	BearerToken string            `yaml:"bearer_token,omitempty"` // Bearer token for authentication
+	TLSConfig   TLSConfig         `yaml:"tls_config,omitempty"`   // Optional TLS configuration
+}
+
+type BasicAuthConfig struct {
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+}
+type TLSConfig struct {
+	Enabled            bool   `yaml:"enabled"` // Optional flag to enable/disable TLS
+	CertFile           string `yaml:"cert_file,omitempty"`
+	KeyFile            string `yaml:"key_file,omitempty"`
+	CACertFile         string `yaml:"ca_cert_file,omitempty"`
+	InsecureSkipVerify bool   `yaml:"insecure_skip_verify,omitempty"`
 }
 
 func GetConfigFilePath() string {
@@ -236,11 +261,25 @@ func setDefaults(config *Config) {
 		}
 	}
 	// Set defaults for Prometheus metrics
-	if config.Prometheus.MetricsPort == 0 {
-		config.Prometheus.MetricsPort = 9090 // Default Prometheus metrics port
+	if config.PrometheusLocal.MetricsPort == 0 {
+		config.PrometheusLocal.MetricsPort = 9090 // Default Prometheus metrics port
 	}
-	if config.Prometheus.Labels == nil {
-		config.Prometheus.Labels = make(map[string]string)
+	if config.PrometheusLocal.Labels == nil {
+		config.PrometheusLocal.Labels = make(map[string]string)
+	}
+
+	// Set defaults for PrometheusRemoteWrite if enabled
+	if config.PrometheusRemoteWrite.Enabled {
+		if config.PrometheusRemoteWrite.Timeout == "" {
+			config.PrometheusRemoteWrite.Timeout = "30s" // Default timeout for remote write
+		}
+		if config.PrometheusRemoteWrite.Headers == nil {
+			config.PrometheusRemoteWrite.Headers = make(map[string]string)
+		}
+
+		if config.PrometheusRemoteWrite.TLSConfig.Enabled && !config.PrometheusRemoteWrite.TLSConfig.InsecureSkipVerify {
+			config.PrometheusRemoteWrite.TLSConfig.InsecureSkipVerify = true // Default to true if not set
+		}
 	}
 
 }
@@ -312,6 +351,28 @@ func validateConfig(config *Config) error {
 		level = logrus.InfoLevel
 	}
 	logrus.SetLevel(level)
+
+	// Validate Prometheus configuration
+	if config.PrometheusLocal.MetricsPort == 0 {
+		return errors.New("PrometheusLocal.MetricsPort is missing")
+	}
+
+	// PrometheusRemoteWrite
+	if config.PrometheusRemoteWrite.Enabled {
+		if config.PrometheusRemoteWrite.BasicAuth.Username == "" && config.PrometheusRemoteWrite.BearerToken == "" {
+			return errors.New("either Basic Auth credentials or a Bearer Token must be provided for PrometheusRemoteWrite")
+		}
+		if config.PrometheusRemoteWrite.BasicAuth.Username != "" && config.PrometheusRemoteWrite.BearerToken != "" {
+			return errors.New("only one authentication method should be used: either Basic Auth or Bearer Token, not both")
+		}
+
+		if config.PrometheusRemoteWrite.URL == "" {
+			return errors.New("PrometheusRemoteWrite URL is required when enabled")
+		}
+		if _, err := time.ParseDuration(config.PrometheusRemoteWrite.Timeout); err != nil {
+			return fmt.Errorf("invalid PrometheusRemoteWrite.Timeout: %v", err)
+		}
+	}
 	return nil
 }
 

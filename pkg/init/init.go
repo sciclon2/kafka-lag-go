@@ -87,8 +87,8 @@ func InitializeMetricsServer(cfg *config.Config) {
 
 	// Start the Prometheus metrics server
 	go func() {
-		address := fmt.Sprintf(":%d", cfg.Prometheus.MetricsPort)
-		logrus.Infof("Starting Prometheus metrics server on port %d", cfg.Prometheus.MetricsPort)
+		address := fmt.Sprintf(":%d", cfg.PrometheusLocal.MetricsPort)
+		logrus.Infof("Starting Prometheus metrics server on port %d", cfg.PrometheusLocal.MetricsPort)
 		if err := http.ListenAndServe(address, metricsMux); err != nil {
 			logrus.Fatalf("Failed to start Prometheus metrics server: %v", err)
 		}
