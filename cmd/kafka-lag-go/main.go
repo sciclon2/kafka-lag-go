@@ -38,7 +38,7 @@ func main() {
 
 	// Initialize Kafka client and admin
 	clientMap, adminMap, saramaConfigMap := maininit.InitializeKafkaClient(cfg)
-	maininit.DeferCloseClientsAndAdmins(clientMap, adminMap)
+	//maininit.DeferCloseClientsAndAdmins(clientMap, adminMap)
 
 	// Set up and start Prometheus metrics HTTP server.
 	maininit.InitializeMetricsServer(cfg)
@@ -82,6 +82,7 @@ func main() {
 	// Initialize Prometheus metrics
 	prometheusMetrics := metrics.NewPrometheusMetrics(cfg.PrometheusLocal.Labels)
 	prometheusMetrics.RegisterMetrics()
+	prometheusMetrics.StartRemoteWriteExporter(cfg)
 
 	// Main processing loop that runs continuously.
 	for {

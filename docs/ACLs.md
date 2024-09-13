@@ -62,7 +62,6 @@ kafka-acls --bootstrap-server kafka-broker:9092 \
   --operation DESCRIBE --cluster
 ```
 
-
 ### Topic Level ACLs
 To allow the application to describe topics, fetch offsets, and perform operations on partitions, apply the following ACLs for topics:
 

@@ -1,13 +1,20 @@
 package metrics
 
 import (
+	"bytes"
+	"fmt"
+	"net/http"
 	"strconv"
 	"sync"
 	"time"
 
+	"github.com/golang/snappy"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sciclon2/kafka-lag-go/pkg/config"
 	"github.com/sciclon2/kafka-lag-go/pkg/structs"
 	"github.com/sirupsen/logrus"
+
+	"github.com/prometheus/prometheus/prompb"
 )
 
 // PrometheusMetrics holds the Prometheus metrics to be exposed
@@ -26,6 +33,123 @@ type PrometheusMetrics struct {
 	iterationTimeSeconds prometheus.Gauge     // Time taken to complete the iteration For the whole taks
 	extraLabels          map[string]string    // Additional labels for Prometheus metrics
 
+}
+
+func (pm *PrometheusMetrics) StartRemoteWriteExporter(cfg *config.Config) {
+	if !cfg.PrometheusRemoteWrite.Enabled {
+		return
+	}
+
+	// Parse the iteration interval
+	//iterationInterval, _ := time.ParseDuration(cfg.App.IterationInterval)
+	iterationInterval, _ := time.ParseDuration("5s")
+	logrus.Infof("Starting Prometheus remote writer with iteration interval: %s", iterationInterval)
+	go func() {
+		ticker := time.NewTicker(iterationInterval)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			err := pm.SendRemoteWrite(&cfg.PrometheusRemoteWrite)
+			if err != nil {
+				logrus.Errorf("Failed to export metrics to remote write: %v", err)
+			}
+		}
+	}()
+}
+
+// SendRemoteWrite exports metrics to a remote Prometheus instance
+func (pm *PrometheusMetrics) SendRemoteWrite(cfg *config.PrometheusRemoteWriteConfig) error {
+	// Create an empty slice to hold the time series data
+	var timeSeries []prompb.TimeSeries
+
+	// Collect data from the registered Prometheus metrics (this gathers all metrics that are registered)
+	metricFamilies, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		return fmt.Errorf("failed to gather metrics: %w", err)
+	}
+
+	// Convert Prometheus metrics to Prometheus Remote Write TimeSeries format
+	for _, metricFamily := range metricFamilies {
+		for _, metric := range metricFamily.Metric {
+			labels := []prompb.Label{
+				{
+					Name:  "__name__",             // Metric name
+					Value: metricFamily.GetName(), // Preserve original name
+				},
+			}
+
+			// Preserve the original labels
+			for _, label := range metric.GetLabel() {
+				labels = append(labels, prompb.Label{
+					Name:  label.GetName(),
+					Value: label.GetValue(),
+				})
+			}
+
+			// Append each sample (value and timestamp)
+			timeSeries = append(timeSeries, prompb.TimeSeries{
+				Labels: labels,
+				Samples: []prompb.Sample{
+					{
+						Value:     metric.GetGauge().GetValue(), // Get the actual metric value
+						Timestamp: time.Now().Unix() * 1000,     // Current timestamp in milliseconds
+					},
+				},
+			})
+		}
+	}
+
+	// Prepare WriteRequest with the collected time-series data
+	writeRequest := &prompb.WriteRequest{
+		Timeseries: timeSeries,
+	}
+
+	// Serialize the write request
+	data, err := writeRequest.Marshal()
+	if err != nil {
+		return fmt.Errorf("prometheus remote write failed to marshal write request: %w", err)
+	}
+
+	// Compress the data using Snappy
+	compressedData := snappy.Encode(nil, data)
+
+	// Create an HTTP request
+	req, err := http.NewRequest("POST", cfg.URL, bytes.NewReader(compressedData))
+	if err != nil {
+		return fmt.Errorf("prometheus remote write failed to create request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Encoding", "snappy")
+	req.Header.Set("Content-Type", "application/x-protobuf")
+
+	// Authentication (Basic Auth or Bearer Token)
+	if cfg.BearerToken != "" {
+		req.Header.Set("Authorization", "Bearer "+cfg.BearerToken)
+	} else if cfg.BasicAuth.Username != "" {
+		req.SetBasicAuth(cfg.BasicAuth.Username, cfg.BasicAuth.Password)
+	}
+
+	// Execute the request
+	timeoutDuration, err := time.ParseDuration(cfg.Timeout)
+	if err != nil {
+		return fmt.Errorf("prometheus remote write invalid timeout duration: %w", err)
+	}
+
+	client := &http.Client{Timeout: timeoutDuration}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("prometheus remote write failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Allow 200 OK and 204 No Content as valid responses
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("prometheus remote write received non-OK status code: %d", resp.StatusCode)
+	}
+
+	logrus.Infof("prometheus remote write Metrics successfully sent to %s", cfg.URL)
+	return nil
 }
 
 func NewPrometheusMetrics(extraLabels map[string]string) *PrometheusMetrics {

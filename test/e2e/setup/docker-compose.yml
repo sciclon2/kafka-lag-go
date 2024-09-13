@@ -2,14 +2,18 @@ version: '3.8'
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.3.0
+    restart: "no"
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
     ports:
       - "2181:2181"
+    networks:
+      - monitoring_network
 
   kafka:
     image: confluentinc/cp-kafka:7.3.0
+    restart: "no"
     depends_on:
       - zookeeper
     ports:
@@ -17,11 +21,71 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "kafka:29092", "--list"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+    networks: 
+      - monitoring_network
 
   redis:
     image: redis:7.0
+    restart: "no"
     ports:
       - "6379:6379"
+    networks:
+      - monitoring_network
+
+  prometheus:
+    image: prom/prometheus
+    restart: "no"
+    container_name: prometheus
+    command: --config.file=/etc/prometheus/prometheus.yml --web.listen-address=:9090 --web.enable-remote-write-receiver
+    volumes:
+      - ../prometheus_config/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - monitoring_network
+
+  nginx:
+    image: nginx
+    restart: "no"
+    container_name: nginx_auth_proxy
+    volumes:
+      - ../prometheus_config/nginx.conf:/etc/nginx/nginx.conf
+      - ../prometheus_config/.htpasswd:/etc/nginx/.htpasswd
+    ports:
+      - "8081:80"
+    depends_on:
+      - prometheus
+    networks:
+      - monitoring_network
+
+  kafka-producer:
+    restart: "no"
+    image: confluentinc/cp-kafka:7.3.0
+    depends_on:
+      - kafka
+    entrypoint: /bin/bash -c 'while true; do for i in $(seq 1 10); do echo "Message" | kafka-console-producer --broker-list kafka:29092 --topic test-topic; done; sleep 1; done'
+
+    networks:
+      - monitoring_network
+
+  kafka-consumer:
+    image: confluentinc/cp-kafka:7.3.0
+    restart: "no"
+    depends_on:
+      - kafka
+    entrypoint: /bin/sh -c "echo 'Consuming messages from test-topic with consumer group my-consumer-group...' && kafka-console-consumer --bootstrap-server kafka:29092 --topic test-topic --group my-consumer-group --from-beginning"
+    networks:
+      - monitoring_network
+
+networks:
+  monitoring_network:
+    driver: bridge
