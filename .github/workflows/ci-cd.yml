@@ -14,8 +14,6 @@ on:
       - created
 
 jobs:
-
-
   discover-e2e-tests:
     name: Discover E2E Test Folders
     runs-on: ubuntu-latest
@@ -50,14 +48,14 @@ jobs:
         curl -SL https://github.com/docker/compose/releases/download/v2.15.1/docker-compose-linux-x86_64 -o ~/.docker/cli-plugins/docker-compose
         chmod +x ~/.docker/cli-plugins/docker-compose
         docker compose version
-        which docker
-
-
+        which docker-compose
 
     - name: Run E2E tests
       run: |
         echo "Running E2E tests for folder: ${{ matrix.folder }}"
         ./test/e2e/run.sh ${{ matrix.folder }} -d
+
+
 
   build-and-push-dev:
     name: Build and Push DEV Stage
