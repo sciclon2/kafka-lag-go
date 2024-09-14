@@ -4,6 +4,7 @@ set -e
 
 # Source the helpers.sh library
 source "$(dirname "$0")/base_helpers/helpers.sh"
+export PATH=$PATH:~/.docker/cli-plugins/
 
 # Check if the base directory is provided
 BASE_DIR=$1
