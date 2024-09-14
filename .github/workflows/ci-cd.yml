@@ -50,7 +50,7 @@ jobs:
     - name: Run E2E tests
       run: |
         echo "Running E2E tests for folder: ${{ matrix.folder }}"
-        ./test/e2e/run.sh ${{ matrix.folder }}
+        ./test/e2e/run.sh ${{ matrix.folder }} -d
 
   build-and-push-dev:
     name: Build and Push DEV Stage
