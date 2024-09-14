@@ -8,17 +8,11 @@ prometheus_remote_write:
   enabled: true                    # Enable remote write
   url: "https://localhost:8443"  # Prometheus remote write URL
   timeout: "30s"                   # Remote write timeout
-  headers:                         # Optional headers like Authorization
-    Authorization: "Bearer <your-token>"
-  #basic_auth:                      # Optional Basic Authentication
-  #  username: "yourusername"
-  #  password: "123456"
-  bearer_token: "dummy_token"
+  basic_auth:                      # Optional Basic Authentication
+    username: "yourusername"
+    password: "123456"
   tls_config:                      # Optional TLS configuration for remote write
     enabled: true
-  #  cert_file: "/path/to/cert.crt"
-  #  key_file: "/path/to/key.key"
-  #  ca_cert_file: "/path/to/ca_cert.pem"
     insecure_skip_verify: true    # Whether to skip server cert verification
 
 kafka_clusters:
