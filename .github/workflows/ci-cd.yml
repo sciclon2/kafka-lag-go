@@ -30,7 +30,7 @@ jobs:
       id: set-outputs
       run: |
         folders=$(find test/e2e/tests/* -maxdepth 0 -type d)
-        echo "e2e-folders=$(echo $folders | jq -R -s -c 'split("\n")[:-1]')" >> $GITHUB_OUTPUT
+        echo "e2e-folders=$(echo \"$folders\" | jq -R -s -c 'split("\n")[:-1]')" >> $GITHUB_OUTPUT
 
   e2e-test:
     name: E2E Test Stage
