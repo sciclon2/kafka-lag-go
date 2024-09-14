@@ -75,8 +75,16 @@ services:
     image: confluentinc/cp-kafka:7.3.0
     depends_on:
       - kafka
-    entrypoint: /bin/bash -c 'while true; do for i in $(seq 1 10); do echo "Message" | kafka-console-producer --broker-list kafka:29092 --topic test-topic; done; sleep 1; done'
-
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        while true; do
+          for i in $(seq 1 10); do
+            echo "Message" | kafka-console-producer --broker-list kafka:29092 --topic test-topic;
+          done;
+          sleep 1;
+        done
     networks:
       - monitoring_network
 
@@ -85,7 +93,12 @@ services:
     restart: "no"
     depends_on:
       - kafka
-    entrypoint: /bin/sh -c "echo 'Consuming messages from test-topic with consumer group my-consumer-group...' && kafka-console-consumer --bootstrap-server kafka:29092 --topic test-topic --group my-consumer-group --from-beginning"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        echo 'Consuming messages from test-topic with consumer group my-consumer-group...'
+        kafka-console-consumer --bootstrap-server kafka:29092 --topic test-topic --group my-consumer-group --from-beginning
     networks:
       - monitoring_network
 
