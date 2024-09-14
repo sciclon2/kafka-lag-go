@@ -6,7 +6,7 @@ on:
       - main
   push:
     branches:
-      - main
+      - '**'  # This allows any branch
     tags:
       - 'v*.*.*'
   release:
