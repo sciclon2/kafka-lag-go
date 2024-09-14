@@ -41,7 +41,7 @@ jobs:
   discover-e2e-tests:
     name: Discover E2E Test Folders
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'release'
+    if: github.event_name == 'push'
     outputs:
       e2e-folders: ${{ steps.set-outputs.outputs.e2e-folders }}
     steps:
@@ -58,7 +58,7 @@ jobs:
     name: E2E Test Stage
     needs: [test, discover-e2e-tests]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'release'
+    if: github.event_name == 'push'
     strategy:
       matrix:
         folder: ${{ fromJson(needs.discover-e2e-tests.outputs.e2e-folders) }}

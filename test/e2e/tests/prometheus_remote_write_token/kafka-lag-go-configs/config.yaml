@@ -8,7 +8,7 @@ prometheus_remote_write:
   enabled: true                    # Enable remote write
   url: "https://localhost:8443"  # Prometheus remote write URL
   timeout: "30s"                   # Remote write timeout
-  bearer_token: "dummy_token1"
+  bearer_token: "dummy_token"
   tls_config:                      # Optional TLS configuration for remote write
     enabled: true
     insecure_skip_verify: true    # Whether to skip server cert verification

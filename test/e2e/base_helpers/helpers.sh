@@ -128,7 +128,7 @@ run_tests() {
   local DEBUG=$2
   local FOLDER_NAME=$(basename "$BASE_DIR")
   echo "Running end-to-end tests: $FOLDER_NAME"
-  RUN_E2E_TESTS=true go test "./test/e2e/..." -cover -count=1 -v
+  RUN_E2E_TESTS=true go test "./test/e2e/tests/$FOLDER_NAME/..." -cover -count=1 -v
 }
 
 # Cleanup function to stop the application and Docker Compose services
