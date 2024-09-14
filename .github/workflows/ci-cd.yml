@@ -28,7 +28,7 @@ jobs:
       id: set-outputs
       run: |
         folders=$(find test/e2e/tests/* -maxdepth 0 -type d)
-        echo "e2e-folders=$(echo \"$folders\" | jq -R -s -c 'split("\n")[:-1]')" >> $GITHUB_OUTPUT
+        echo "e2e-folders=$(echo "$folders" | jq -R -s -c 'split("\n")[:-1]')" >> $GITHUB_OUTPUT
 
   e2e-test:
     name: E2E Test Stage
@@ -47,7 +47,6 @@ jobs:
         mkdir -p ~/.docker/cli-plugins/
         curl -SL https://github.com/docker/compose/releases/download/v2.15.1/docker-compose-linux-x86_64 -o ~/.docker/cli-plugins/docker-compose
         chmod +x ~/.docker/cli-plugins/docker-compose
-        docker compose version
 
     - name: Run E2E tests
       run: |
