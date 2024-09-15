@@ -20,7 +20,8 @@ If you encounter a bug or have an idea for a new feature, please create an issue
   - Expected behavior vs. actual behavior
   - Relevant logs or screenshots
   - Version of the application and environment details
-  - **Use the Debug Flag**: Run the application with the `--debug` flag to capture additional diagnostic information. This will help us better understand the issue and speed up the resolution process.
+  - **Enable Debug Mode**: To gather more information, you can enable the debug mode in your `config.yaml` file by setting the `log_level` under `app` to `debug`. This will provide additional diagnostic logs that can help in troubleshooting.
+
   
 - **For Feature Requests**: Provide a detailed description of the feature you would like to see added. Include any specific use cases or examples to clarify the request.
 
