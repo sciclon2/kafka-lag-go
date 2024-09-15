@@ -16,7 +16,7 @@ func setupPrometheusMetricsWithRegistry(registry *prometheus.Registry) *Promethe
 		"env":     "test",
 		"version": "v1",
 	}
-	pm := NewPrometheusMetrics(extraLabels)
+	pm := NewLocalPrometheusMetrics(extraLabels)
 
 	// Register metrics with the provided registry
 	registry.MustRegister(pm.lagInOffsets)
@@ -35,7 +35,7 @@ func setupPrometheusMetricsWithRegistry(registry *prometheus.Registry) *Promethe
 	return pm
 }
 
-func TestPrometheusMetrics_ProcessMetrics(t *testing.T) {
+func TestPrometheusMetrics_ProcessLocalMetrics(t *testing.T) {
 	// Create a new registry for the test
 	registry := prometheus.NewRegistry()
 
@@ -74,7 +74,7 @@ func TestPrometheusMetrics_ProcessMetrics(t *testing.T) {
 	close(metricsToExportChan)
 
 	// Process the metrics
-	pm.ProcessMetrics(metricsToExportChan, 1, startTime)
+	pm.ProcessLocalMetrics(metricsToExportChan, 1, startTime)
 
 	// Validate that metrics are recorded using the custom registry
 
@@ -150,7 +150,7 @@ func TestIterationTimeCalculation(t *testing.T) {
 	// Simulate some delay
 	time.Sleep(100 * time.Millisecond)
 
-	pm.ProcessMetrics(metricsToExportChan, 1, startTime)
+	pm.ProcessLocalMetrics(metricsToExportChan, 1, startTime)
 
 	// Ensure that the iteration time is recorded
 	iterationTime := testutil.ToFloat64(pm.iterationTimeSeconds)
@@ -170,7 +170,7 @@ func TestProcessMetrics_EmptyChannel(t *testing.T) {
 	close(metricsToExportChan)                       // Close immediately to simulate no metrics
 
 	// Process the metrics
-	pm.ProcessMetrics(metricsToExportChan, 1, startTime)
+	pm.ProcessLocalMetrics(metricsToExportChan, 1, startTime)
 
 	// Ensure that no metrics have been recorded
 	assert.Equal(t, 0.0, testutil.ToFloat64(pm.totalGroupsChecked.With(prometheus.Labels{"clustername": "test-cluster", "env": "test", "version": "v1"})))
@@ -233,7 +233,7 @@ func TestProcessMetrics_MultipleGroups(t *testing.T) {
 	close(metricsToExportChan)
 
 	// Process the metrics
-	pm.ProcessMetrics(metricsToExportChan, 2, startTime)
+	pm.ProcessLocalMetrics(metricsToExportChan, 2, startTime)
 
 	// Validate metrics for group1
 	expectedPartitionLabelsGroup1 := prometheus.Labels{
@@ -295,7 +295,7 @@ func TestPrometheusMetrics_RegistrationAndProcessing(t *testing.T) {
 
 	// Process the metrics
 	startTime := time.Now()
-	pm.ProcessMetrics(metricsToExportChan, 1, startTime)
+	pm.ProcessLocalMetrics(metricsToExportChan, 1, startTime)
 
 	// Gather the metrics from the registry
 	metricFamilies, err := registry.Gather()
@@ -384,7 +384,7 @@ func TestProcessMetrics_NoLag(t *testing.T) {
 	close(metricsToExportChan)
 
 	// Process the metrics
-	pm.ProcessMetrics(metricsToExportChan, 1, startTime)
+	pm.ProcessLocalMetrics(metricsToExportChan, 1, startTime)
 
 	// Validate that metrics are set to 0 for this group
 	expectedPartitionLabels := prometheus.Labels{
@@ -481,7 +481,7 @@ func TestPrometheusMetrics_MultipleClusters(t *testing.T) {
 
 	// Process the metrics
 	startTime := time.Now()
-	pm.ProcessMetrics(metricsToExportChan, 1, startTime)
+	pm.ProcessLocalMetrics(metricsToExportChan, 1, startTime)
 
 	// Check total groups checked per cluster
 	metricFamilies, err := registry.Gather()
@@ -533,7 +533,7 @@ func TestPrometheusMetrics_NoTopics(t *testing.T) {
 
 	// Process the metrics
 	startTime := time.Now()
-	pm.ProcessMetrics(metricsToExportChan, 1, startTime)
+	pm.ProcessLocalMetrics(metricsToExportChan, 1, startTime)
 
 	// Gather and validate metrics
 	metricFamilies, err := registry.Gather()
@@ -587,7 +587,7 @@ func TestPrometheusMetrics_Concurrency(t *testing.T) {
 
 	// Process the metrics with 5 workers
 	startTime := time.Now()
-	pm.ProcessMetrics(metricsToExportChan, 5, startTime)
+	pm.ProcessLocalMetrics(metricsToExportChan, 5, startTime)
 
 	// Gather and validate metrics
 	metricFamilies, err := registry.Gather()

@@ -28,7 +28,23 @@ type PrometheusMetrics struct {
 
 }
 
-func NewPrometheusMetrics(extraLabels map[string]string) *PrometheusMetrics {
+func (pm *PrometheusMetrics) RegisterLocalMetrics() {
+	prometheus.MustRegister(pm.lagInOffsets)
+	prometheus.MustRegister(pm.lagInSeconds)
+	prometheus.MustRegister(pm.groupMaxLagInOffsets)
+	prometheus.MustRegister(pm.groupMaxLagInSeconds)
+	prometheus.MustRegister(pm.topicMaxLagInOffsets)
+	prometheus.MustRegister(pm.topicMaxLagInSeconds)
+	prometheus.MustRegister(pm.groupSumLagInOffsets)
+	prometheus.MustRegister(pm.groupSumLagInSeconds)
+	prometheus.MustRegister(pm.topicSumLagInOffsets)
+	prometheus.MustRegister(pm.topicSumLagInSeconds)
+	prometheus.MustRegister(pm.totalGroupsChecked)
+	prometheus.MustRegister(pm.iterationTimeSeconds)
+}
+
+// NewLocalPrometheusMetrics creates a new PrometheusMetrics instance with the provided extra labels.
+func NewLocalPrometheusMetrics(extraLabels map[string]string) *PrometheusMetrics {
 	// Ensure labels map is not nil
 	if extraLabels == nil {
 		extraLabels = make(map[string]string)
@@ -130,22 +146,8 @@ func NewPrometheusMetrics(extraLabels map[string]string) *PrometheusMetrics {
 		),
 	}
 }
-func (pm *PrometheusMetrics) RegisterMetrics() {
-	prometheus.MustRegister(pm.lagInOffsets)
-	prometheus.MustRegister(pm.lagInSeconds)
-	prometheus.MustRegister(pm.groupMaxLagInOffsets)
-	prometheus.MustRegister(pm.groupMaxLagInSeconds)
-	prometheus.MustRegister(pm.topicMaxLagInOffsets)
-	prometheus.MustRegister(pm.topicMaxLagInSeconds)
-	prometheus.MustRegister(pm.groupSumLagInOffsets)
-	prometheus.MustRegister(pm.groupSumLagInSeconds)
-	prometheus.MustRegister(pm.topicSumLagInOffsets)
-	prometheus.MustRegister(pm.topicSumLagInSeconds)
-	prometheus.MustRegister(pm.totalGroupsChecked)
-	prometheus.MustRegister(pm.iterationTimeSeconds)
-}
 
-func (pm *PrometheusMetrics) ProcessMetrics(metricsToExportChan <-chan *structs.Group, numWorkers int, startTime time.Time) {
+func (pm *PrometheusMetrics) ProcessLocalMetrics(metricsToExportChan <-chan *structs.Group, numWorkers int, startTime time.Time) {
 	var wg sync.WaitGroup
 	clusterGroupCountMap := sync.Map{} // Use sync.Map for concurrent access
 

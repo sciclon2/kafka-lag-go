@@ -43,3 +43,7 @@ go.sum
 
 # binaries
 bin/
+
+# Ignore Nginx TLS certificates
+**/nginx.key
+**/nginx.crt

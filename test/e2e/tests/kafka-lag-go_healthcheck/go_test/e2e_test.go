@@ -39,12 +39,3 @@ func TestHealthEndpoint(t *testing.T) {
 	}, "Expected status to be either 'OK' or 'Unhealthy'")
 
 }
-
-func TestMetricsEndpoint(t *testing.T) {
-	// Wait for the application to be up and running
-	time.Sleep(3 * time.Second)
-
-	resp, err := http.Get("http://localhost:9090/metrics")
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-}

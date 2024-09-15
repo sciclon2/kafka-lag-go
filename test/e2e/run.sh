@@ -2,45 +2,39 @@
 
 set -e
 
-# Define the cleanup function to stop the application
-cleanup() {
-    echo "Stopping the application..."
-    # Add the command to stop your application here
-    # For example, if you ran the app in the background using '&':
-    kill $APP_PID
+# Source the helpers.sh library
+source "$(dirname "$0")/base_helpers/helpers.sh"
+export PATH=$PATH:~/.docker/cli-plugins/
 
-    # Stop the Docker Compose services
-    docker-compose -f test/e2e/setup/docker-compose.yml down
-}
+# Check if the base directory is provided
+BASE_DIR=$1
+ensure_base_dir_provided
 
-# Set up a trap to call the cleanup function on exit
-trap cleanup EXIT
+# Debug mode
+DEBUG=false
+for arg in "$@"; do
+  case $arg in
+    -d|--debug)
+      DEBUG=true
+      shift
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
 
-# Start the infrastructure using Docker Compose
-echo "Starting infrastructure..."
-docker-compose -f test/e2e/setup/docker-compose.yml up -d
+# Trap to handle any errors or script exits and perform cleanup
+trap cleanup EXIT ERR
 
-# Ensure go.mod exists with correct Go version
-echo "Checking go.mod..."
-if [ ! -f go.mod ]; then
-    go mod init github.com/sciclon2/kafka-lag-go
-    go mod edit -go=1.20  # Set the Go version here
-fi
-go mod tidy
-
-# Run the main application in the background
-echo "Starting kafka-lag-go application..."
-go build -o bin/kafka-lag-go cmd/kafka-lag-go/main.go
-./bin/kafka-lag-go --config-file test/e2e/config.yaml &
-
-# Capture the PID of the application
-APP_PID=$!
-
-# Wait for the application to start up
-sleep 2
-
-# Run the end-to-end tests
-echo "Running end-to-end tests..."
-RUN_E2E_TESTS=true go test -v ./test/e2e/...
-
-# The cleanup function will be called automatically when the script exits
+# Main script execution
+generate_tls_cert "$BASE_DIR" "$DEBUG"
+start_infrastructure "$BASE_DIR" "$DEBUG"
+wait_for_processing
+run_kafka_lag_app "$BASE_DIR/kafka-lag-go-configs/config.yaml" "$DEBUG"
+wait_for_health_check
+send_signals "$DEBUG"
+run_tests "$BASE_DIR" "$DEBUG"
+  
+# Stop everything before the next iteration
+stop_infrastructure "$BASE_DIR" "$DEBUG"

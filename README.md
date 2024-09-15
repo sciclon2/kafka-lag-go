@@ -21,7 +21,9 @@
 9. [Health Check Feature](#health-check-feature)
 10. [Prometheus Metrics](#prometheus-metrics-overview)
 11. [Next Steps](#next-steps)
-12. [License](#license)
+12. [How to Contribute](#how-to-contribute)
+13. [License](#license)
+
 
 # Kafka Lag Go
 
@@ -104,11 +106,28 @@ docker build -t kafka-lag-go:latest .
 Kafka Lag Monitor requires a YAML configuration file. Create a file named `config.yaml` and customize it based on your environment. Below is an example configuration:
 
 ```yaml
-prometheus:
+prometheus_local:
   metrics_port: 9090
   labels:
     env: production
     service: kafka-lag-go
+
+prometheus_remote_write:
+  enabled: true
+  url: "https://remote-prometheus-server.com/"
+  headers:
+    X-Custom-Header: "myCustomHeaderValue" 
+  timeout: "30s"
+  basic_auth:
+    username: "myUsername"
+    password: "myPassword"
+  bearer_token: "myBearerToken" 
+  tls_config:
+    enabled: true
+    cert_file: "/path/to/cert.pem"
+    key_file: "/path/to/key.pem"
+    ca_cert_file: "/path/to/ca_cert.pem"
+    insecure_skip_verify: true
 
 kafka_clusters:
   - name: "kafka-cluster-1"
@@ -203,14 +222,28 @@ You can download the Docker image from Docker Hub using the following command:
 docker pull sciclon2/kafka-lag-go
 ```
 
-
 ## Configuration
 
 The Kafka Lag Monitor requires a YAML configuration file to customize its behavior. Below is a description of the available configuration options:
 
 - **Prometheus Metrics**:
-  - `prometheus.metrics_port`: The port on which Prometheus metrics will be exposed.
-  - `prometheus.labels`: Additional labels to be attached to the exported metrics.
+  - `prometheus_local.metrics_port`: The port on which Prometheus metrics will be exposed locally.
+  - `prometheus_local.labels`: Additional labels to be attached to the exported metrics.
+  - `prometheus_remote_write`: Configuration for Prometheus Remote Write to export metrics remotely.
+    - `url`: The URL of the Prometheus remote write endpoint.
+    - `headers`: Optional HTTP headers (e.g., custom headers) for the remote write request.
+    - `timeout`: Timeout duration for sending the metrics.
+    - **Authentication**:
+      - `basic_auth`: For basic authentication, specify:
+        - `username`: The username for basic auth.
+        - `password`: The password for basic auth.
+      - `bearer_token`: If using bearer token authentication, specify the token here.
+    - **TLS Settings**:
+      - `tls_config.enabled`: Whether TLS encryption is enabled for Prometheus remote write.
+      - `tls_config.cert_file`: Path to the client certificate file.
+      - `tls_config.key_file`: Path to the client key file.
+      - `tls_config.ca_cert_file`: Path to the CA certificate file for verifying the server's certificate.
+      - `tls_config.insecure_skip_verify`: Whether to skip TLS certificate verification.
 
 - **Kafka Clusters**:
   - `kafka_clusters`: An array of Kafka cluster configurations, each with the following options:
@@ -254,6 +287,7 @@ The Kafka Lag Monitor requires a YAML configuration file to customize its behavi
   - `app.health_check_port`: The port on which the health check endpoint will be exposed.
   - `app.health_check_path`: The path of the health check endpoint.
 
+
 Please refer to the `config.go` file for more details on each configuration option.
 
 ## Running Unit and End-to-End (E2E) Tests
@@ -272,20 +306,9 @@ go test ./... -v -cover -count=1
 
 ### End-to-End (E2E) Tests
 
-For E2E tests, we simulate the full system, including Kafka, storage (Redis in this case), and compile the `kafka-lag-go` binary. You can run the E2E tests using the provided script:
+The E2E tests ensure that the full system operates as expected by validating the successful export of key metrics, confirming that these metrics reach their final destinations in either Prometheus Local or Prometheus Remote Write.
 
-```bash
-test/e2e/run.sh
-```
-
-This script will:
-1. Create the necessary infrastructure, including Kafka and Redis.
-2. Compile the `kafka-lag-go` binary.
-3. Execute the end-to-end tests to verify the system's behavior under real conditions.
-
-The E2E test script is designed to handle cleanup automatically. Whether the tests pass or fail, the script will catch the signal and ensure that the Docker Compose environment is properly cleaned up after the tests have finished.
-
-Make sure you have Docker installed and running, as it is used to set up the test environment.
+For more detailed information on the E2E test setup and execution, please see the [E2E Test Documentation](docs/e2e-tests.md).
 
 ## Health Check Feature
 
@@ -331,7 +354,10 @@ http://<docker-host-ip>:<metrics_port>/metrics
 
 ## Next Steps
 Please check issues section.
-For more details on usage and advanced configuration, refer to the full documentation (coming soon).
+For more details on usage and advanced configuration, refer to the full documentation located in docs folder.
+
+## How to Contribute
+Contributions are welcome! Please refer to the [How to Contribute](docs/how-to-contribute.md) guide for more information on how to get started, guidelines for submitting pull requests, and code review standards.
 
 ## License
 

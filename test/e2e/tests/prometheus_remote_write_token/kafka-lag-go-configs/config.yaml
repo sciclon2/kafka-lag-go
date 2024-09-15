@@ -1,0 +1,56 @@
+prometheus_local:
+  metrics_port: 9099
+  labels:
+    env: "production"
+    service: "kafka-lag-go"
+
+prometheus_remote_write:
+  enabled: true                    # Enable remote write
+  url: "https://localhost:8443"  # Prometheus remote write URL
+  timeout: "30s"                   # Remote write timeout
+  bearer_token: "dummy_token"
+  tls_config:                      # Optional TLS configuration for remote write
+    enabled: true
+    insecure_skip_verify: true    # Whether to skip server cert verification
+
+kafka_clusters:
+  - name: "cluster-1"
+    brokers:
+      - "localhost:9092"
+    client_request_timeout: "30s"
+    metadata_fetch_timeout: "5s"  
+    consumer_groups:
+      whitelist: null
+      blacklist: null
+    ssl:
+      enabled: false
+      client_certificate_file: ""
+      client_key_file: ""
+      insecure_skip_verify: true
+    sasl:
+      enabled: false
+      mechanism: "SCRAM-SHA-512"
+      user: ""
+      password: ""
+
+storage:
+  type: "redis"
+  redis:
+    address: "localhost"
+    port: 6379
+    client_request_timeout: "60s"
+    client_idle_timeout: "5m"
+    retention_ttl_seconds: 7200
+    auth:
+      enabled: false
+      username: ""
+      password: ""
+    ssl:
+      enabled: false
+      insecure_skip_verify: true
+
+app:
+  iteration_interval: "15s"
+  log_level: "info"
+  health_check_port: 8080
+  health_check_path: "/healthz"

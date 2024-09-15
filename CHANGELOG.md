@@ -1,5 +1,28 @@
 # Changelog
 
+## [v3.0.0] - Prometheus Remote Write Support and E2E Test Enhancements (12th Sept 2024)
+
+### Breaking Changes
+- **Configuration File Format**: 
+  - Introduced a new structure in the configuration file to separate Prometheus local scraping and Prometheus Remote Write.
+  - Users now need to update their `config.yaml` file to accommodate the new structure, including new sections for `prometheus_local` and `prometheus_remote_write`.
+
+### Feat
+- **Prometheus Remote Write**: 
+  - Added support for Prometheus Remote Write, allowing metrics to be sent directly to a remote Prometheus instance.
+  - The remote write feature supports both **Basic Auth** and **Bearer Token** authentication, as well as optional **TLS configuration** for secure communication.
+- **Prometheus Local and Remote Split**: 
+  - Split the original `prometheus.go` file into two separate files: one for **Prometheus Local** metrics and one for **Prometheus Remote Write**, improving clarity and maintainability.
+- **E2E Test Enhancements**: 
+  - Created a new structure for **self-discovering end-to-end tests** that run in isolated environments. Each E2E test is automatically detected and executed in a separate job in GitHub Actions for better isolation and parallelism.
+  - Added a specific **E2E test for Prometheus Remote Write** to ensure the metrics are correctly sent and received by the remote Prometheus server.
+
+### Documentation
+- **Prometheus Documentation**: 
+  - Updated the documentation with details on how to configure **Prometheus Remote Write**, including **Basic Auth**, **Bearer Token**, and **TLS** settings.
+  - Provided examples for both local and remote Prometheus configurations, helping users understand how to transition to the new structure.
+  
+---
 
 ## [v2.0.2] - Redis Authentication, Authorization, and TLS Support (10th Sept 2024)
 

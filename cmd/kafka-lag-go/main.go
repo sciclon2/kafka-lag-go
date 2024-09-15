@@ -80,8 +80,9 @@ func main() {
 	store.StartNodeMonitoring(monitorInterval)
 
 	// Initialize Prometheus metrics
-	prometheusMetrics := metrics.NewPrometheusMetrics(cfg.Prometheus.Labels)
-	prometheusMetrics.RegisterMetrics()
+	prometheusMetrics := metrics.NewLocalPrometheusMetrics(cfg.PrometheusLocal.Labels)
+	prometheusMetrics.RegisterLocalMetrics()
+	prometheusMetrics.StartRemoteWriteExporter(cfg)
 
 	// Main processing loop that runs continuously.
 	for {
@@ -118,7 +119,7 @@ func main() {
 		metricsToExportChan := lp.GenerateMetrics(groupsComplete, cfg.App.NumWorkers)
 
 		// Start processing metrics concurrently
-		prometheusMetrics.ProcessMetrics(metricsToExportChan, cfg.App.NumWorkers, startTime)
+		prometheusMetrics.ProcessLocalMetrics(metricsToExportChan, cfg.App.NumWorkers, startTime)
 
 		// Wait for the next iteration or handle a signal
 		SleepToMaintainInterval(startTime, iterationInterval, sigChan)
