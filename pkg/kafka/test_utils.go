@@ -36,11 +36,6 @@ func (m *MockKafkaClient) GetOffset(topic string, partition int32, time int64) (
 	return args.Get(0).(int64), args.Error(1)
 }
 
-func (m *MockKafkaClient) Leader(topic string, partition int32) (*sarama.Broker, error) {
-	args := m.Called(topic, partition)
-	return args.Get(0).(*sarama.Broker), args.Error(1)
-}
-
 // RefreshMetadata mocks the RefreshMetadata method.
 func (m *MockKafkaClient) RefreshMetadata(topics ...string) error {
 	args := m.Called(topics)

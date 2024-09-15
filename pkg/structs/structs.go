@@ -10,7 +10,6 @@ type KafkaClient interface {
 	//Brokers() []KafkaBrokerInterface
 	Brokers() []*sarama.Broker
 	GetOffset(topic string, partition int32, time int64) (int64, error)
-	Leader(topic string, partition int32) (*sarama.Broker, error)
 	RefreshMetadata(topics ...string) error
 	Close() error
 }
@@ -93,11 +92,6 @@ func (s *SaramaKafkaClient) Close() error {
 // Implement the missing GetOffset method
 func (s *SaramaKafkaClient) GetOffset(topic string, partition int32, time int64) (int64, error) {
 	return s.Client.GetOffset(topic, partition, time)
-}
-
-// Implement the missing Leader method
-func (s *SaramaKafkaClient) Leader(topic string, partition int32) (*sarama.Broker, error) {
-	return s.Client.Leader(topic, partition)
 }
 
 // Implement the missing RefreshMetadata method

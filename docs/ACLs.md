@@ -34,7 +34,6 @@ The Kafka client interface requires the following permissions:
 |----------------------------|-------------|---------------|--------------------------------------------------------------------|
 | **Brokers()**               | DESCRIBE    | Cluster       | Allows fetching metadata of brokers.                               |
 | **GetOffset()**             | DESCRIBE/READ | Topic       | Allows fetching offsets for specific topic partitions.             |
-| **Leader()**                | DESCRIBE    | Topic         | Allows describing the leader broker for a partition in a topic.    |
 | **RefreshMetadata()**       | DESCRIBE    | Topic         | Allows refreshing metadata for specific topics.                    |
 
 ### Kafka Admin Permissions
