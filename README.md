@@ -19,7 +19,7 @@
     1. [Unit Tests](#unit-tests)
     2. [End-to-End (E2E) Tests](#end-to-end-e2e-tests)
 9. [Health Check Feature](#health-check-feature)
-10. [Prometheus Metrics](#prometheus-metrics-overview)
+10. [Prometheus Metrics](#prometheus-metrics)
 11. [Next Steps](#next-steps)
 12. [How to Contribute](#how-to-contribute)
 13. [License](#license)
@@ -333,24 +333,32 @@ This application exposes a comprehensive set of Prometheus metrics that provide 
 
 ### Metrics Overview
 
-- **`kafka_consumer_group_lag_in_offsets (group, topic, partition)`**: The lag in offsets for a specific partition within a Kafka topic for a consumer group. *(Type: Gauge)*
-- **`kafka_consumer_group_lag_in_seconds (group, topic, partition)`**: The lag in seconds for a specific partition within a Kafka topic for a consumer group. *(Type: Gauge)*
-- **`kafka_consumer_group_max_lag_in_offsets (group)`**: The maximum lag in offsets across all topics and partitions within a Kafka consumer group. *(Type: Gauge)*
-- **`kafka_consumer_group_max_lag_in_seconds (group)`**: The maximum lag in seconds across all topics and partitions within a Kafka consumer group. *(Type: Gauge)*
-- **`kafka_consumer_group_topic_max_lag_in_offsets (group, topic)`**: The maximum lag in offsets for a specific Kafka topic within a consumer group. *(Type: Gauge)*
-- **`kafka_consumer_group_topic_max_lag_in_seconds (group, topic)`**: The maximum lag in seconds for a specific Kafka topic within a consumer group. *(Type: Gauge)*
-- **`kafka_consumer_group_sum_lag_in_offsets (group)`**: The sum of lag in offsets across all topics and partitions within a Kafka consumer group. *(Type: Gauge)*
-- **`kafka_consumer_group_sum_lag_in_seconds (group)`**: The sum of lag in seconds across all topics and partitions within a Kafka consumer group. *(Type: Gauge)*
-- **`kafka_consumer_group_topic_sum_lag_in_offsets (group, topic)`**: The sum of lag in offsets for a specific Kafka topic within a consumer group. *(Type: Gauge)*
-- **`kafka_consumer_group_topic_sum_lag_in_seconds (group, topic)`**: The sum of lag in seconds for a specific Kafka topic within a consumer group. *(Type: Gauge)*
-- **`kafka_total_groups_checked`**: The total number of Kafka consumer groups checked in each iteration. *(Type: Gauge)*
-- **`kafka_iteration_time_seconds`**: The time taken to complete an iteration of checking all Kafka consumer groups. *(Type: Gauge)*
+## Prometheus Metrics
+
+This application exposes a comprehensive set of Prometheus metrics that provide insights into the lag experienced by Kafka consumer groups. These metrics help monitor the health and performance of your Kafka consumers.
+
+| Metric Name                                         | Description                                                                                       | Type  |
+|-----------------------------------------------------|---------------------------------------------------------------------------------------------------|-------|
+| `kafka_consumer_group_lag_in_offsets`               | The lag in offsets for a specific partition within a Kafka topic for a consumer group.             | Gauge |
+| `kafka_consumer_group_lag_in_seconds`               | The lag in seconds for a specific partition within a Kafka topic for a consumer group.             | Gauge |
+| `kafka_consumer_group_max_lag_in_offsets`           | The maximum lag in offsets across all topics and partitions within a Kafka consumer group.         | Gauge |
+| `kafka_consumer_group_max_lag_in_seconds`           | The maximum lag in seconds across all topics and partitions within a Kafka consumer group.         | Gauge |
+| `kafka_consumer_group_topic_max_lag_in_offsets`     | The maximum lag in offsets for a specific Kafka topic within a consumer group.                     | Gauge |
+| `kafka_consumer_group_topic_max_lag_in_seconds`     | The maximum lag in seconds for a specific Kafka topic within a consumer group.                     | Gauge |
+| `kafka_consumer_group_sum_lag_in_offsets`           | The sum of lag in offsets across all topics and partitions within a Kafka consumer group.          | Gauge |
+| `kafka_consumer_group_sum_lag_in_seconds`           | The sum of lag in seconds across all topics and partitions within a Kafka consumer group.          | Gauge |
+| `kafka_consumer_group_topic_sum_lag_in_offsets`     | The sum of lag in offsets for a specific Kafka topic within a consumer group.                      | Gauge |
+| `kafka_consumer_group_topic_sum_lag_in_seconds`     | The sum of lag in seconds for a specific Kafka topic within a consumer group.                      | Gauge |
+| `kafka_total_groups_checked`                        | The total number of Kafka consumer groups checked in each iteration.                               | Gauge |
+| `kafka_iteration_time_seconds`                      | The time taken to complete an iteration of checking all Kafka consumer groups.                     | Gauge |
 
 Once the container is running, Kafka Lag Monitor will expose Prometheus metrics on the port specified in the configuration file (`metrics_port`). You can access the metrics at:
 
 ```
 http://<docker-host-ip>:<metrics_port>/metrics
 ```
+
+In addition to exposing metrics locally, we also support Prometheus Remote Write, which allows sending metrics to another Prometheus instance for centralized storage and monitoring. For detailed setup and configuration, please refer to [Prometheus Remote Write documentation](docs/prometheus_remote_write.md).
 
 ## Next Steps
 Please check issues section.
