@@ -167,10 +167,10 @@ func (pm *PrometheusMetrics) RemoteWriteSendRequest(cfg *config.PrometheusRemote
 	req.Header.Set("Content-Encoding", "snappy")
 	req.Header.Set("Content-Type", "application/x-protobuf")
 
-	// Authentication (Basic Auth or Bearer Token)
+	// Authentication (Basic Auth or Bearer Token) - Make sure both are optional
 	if cfg.BearerToken != "" {
 		req.Header.Set("Authorization", "Bearer "+cfg.BearerToken)
-	} else if cfg.BasicAuth.Username != "" {
+	} else if cfg.BasicAuth.Username != "" && cfg.BasicAuth.Password != "" {
 		req.SetBasicAuth(cfg.BasicAuth.Username, cfg.BasicAuth.Password)
 	}
 

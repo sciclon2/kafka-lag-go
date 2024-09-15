@@ -359,9 +359,6 @@ func validateConfig(config *Config) error {
 
 	// PrometheusRemoteWrite
 	if config.PrometheusRemoteWrite.Enabled {
-		if config.PrometheusRemoteWrite.BasicAuth.Username == "" && config.PrometheusRemoteWrite.BearerToken == "" {
-			return errors.New("either Basic Auth credentials or a Bearer Token must be provided for PrometheusRemoteWrite")
-		}
 		if config.PrometheusRemoteWrite.BasicAuth.Username != "" && config.PrometheusRemoteWrite.BearerToken != "" {
 			return errors.New("only one authentication method should be used: either Basic Auth or Bearer Token, not both")
 		}

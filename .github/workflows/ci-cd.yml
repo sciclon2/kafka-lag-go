@@ -41,6 +41,7 @@ jobs:
 
   discover-e2e-tests:
     name: Discover E2E Test Folders
+    needs: [test]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'release'
     outputs:
