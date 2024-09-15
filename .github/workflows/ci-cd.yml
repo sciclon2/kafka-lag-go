@@ -25,7 +25,7 @@ jobs:
       run: |
         if [ ! -f go.mod ]; then
           go mod init github.com/sciclon2/kafka-lag-go
-          go mod edit -go=1.20  # Set the Go version here
+          go mod edit -go=1.21  # Set the Go version here
         fi
         go mod tidy
     - name: Run Unit tests in Go container
@@ -33,7 +33,7 @@ jobs:
         docker run --rm \
           -v "${{ github.workspace }}:/app" \
           -w /app \
-          golang:1.20 \
+          golang:1.21 \
           bash -c "go mod tidy && go test ./pkg/... ./cmd/kafka-lag-go/... -v -cover"
 
   discover-e2e-tests:
