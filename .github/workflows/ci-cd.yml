@@ -14,6 +14,28 @@ on:
       - created
 
 jobs:
+  test:
+    name: Unit test Stage
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    - name: Ensure go.mod exists with correct Go version
+      run: |
+        if [ ! -f go.mod ]; then
+          go mod init github.com/sciclon2/kafka-lag-go
+          go mod edit -go=1.20  # Set the Go version here
+        fi
+        go mod tidy
+    - name: Run Unit tests in Go container
+      run: |
+        docker run --rm \
+          -v "${{ github.workspace }}:/app" \
+          -w /app \
+          golang:1.20 \
+          bash -c "go mod tidy && go test ./pkg/... ./cmd/kafka-lag-go/... -v -cover"
+
   discover-e2e-tests:
     name: Discover E2E Test Folders
     runs-on: ubuntu-latest
@@ -51,7 +73,7 @@ jobs:
     - name: Run E2E tests
       run: |
         echo "Running E2E tests for folder: ${{ matrix.folder }}"
-        ./test/e2e/run.sh ${{ matrix.folder }} -d
+        ./test/e2e/run.sh ${{ matrix.folder }}
 
 
 
