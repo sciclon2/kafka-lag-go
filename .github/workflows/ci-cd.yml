@@ -42,7 +42,7 @@ jobs:
     name: Discover E2E Test Folders
     needs: [test]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'release'
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'release'
     outputs:
       e2e-folders: ${{ steps.set-outputs.outputs.e2e-folders }}
     steps:
@@ -60,11 +60,11 @@ jobs:
     name: E2E Test Stage
     needs: [discover-e2e-tests]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'release'
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'release'
     strategy:
       matrix:
         folder: ${{ fromJson(needs.discover-e2e-tests.outputs.e2e-folders) }}
-        
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
@@ -84,8 +84,7 @@ jobs:
     name: Build and Push DEV Stage
     runs-on: ubuntu-latest
     needs: e2e-test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')   
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
