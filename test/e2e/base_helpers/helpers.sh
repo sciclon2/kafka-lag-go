@@ -28,21 +28,23 @@ generate_tls_cert() {
   # Define the directory where the certificates will be stored
   local CERT_DIR="$BASE_DIR/$CERT_SUBDIR"
   
-  print_debug "$DEBUG" "Generating TLS certificate and key in $CERT_DIR..."
-  
-  # Create the directory if it doesn't exist
-  mkdir -p "$CERT_DIR"
-  
-  # Generate the self-signed certificate and key
-  openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
-    -keyout "$CERT_DIR/nginx.key" \
-    -out "$CERT_DIR/nginx.crt" \
-    -subj "/C=US/ST=State/L=City/O=Organization/OU=Unit/CN=localhost" > /dev/null 2>&1
-  
-  # Ensure the permissions are set correctly
-  chmod 644 "$CERT_DIR/nginx."*
-  
-  print_debug "$DEBUG" "TLS certificate and key have been successfully generated in $CERT_DIR."
+  # Check if the nginx_configs directory exists
+  if [ -d "$CERT_DIR" ]; then
+    print_debug "$DEBUG" "Generating TLS certificate and key in $CERT_DIR..."
+    
+    # Generate the self-signed certificate and key
+    openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
+      -keyout "$CERT_DIR/nginx.key" \
+      -out "$CERT_DIR/nginx.crt" \
+      -subj "/C=US/ST=State/L=City/O=Organization/OU=Unit/CN=localhost" > /dev/null 2>&1
+    
+    # Ensure the permissions are set correctly
+    chmod 644 "$CERT_DIR/nginx."*
+    
+    print_debug "$DEBUG" "TLS certificate and key have been successfully generated in $CERT_DIR."
+  else
+    print_debug "$DEBUG" "Directory $CERT_DIR does not exist. Skipping TLS certificate generation as it is not needed for this test."
+  fi
 }
 
 # Function to start Docker Compose infrastructure (requires BASE_DIR)
