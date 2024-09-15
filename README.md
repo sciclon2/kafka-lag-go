@@ -21,7 +21,9 @@
 9. [Health Check Feature](#health-check-feature)
 10. [Prometheus Metrics](#prometheus-metrics-overview)
 11. [Next Steps](#next-steps)
-12. [License](#license)
+12. [How to Contribute](#how-to-contribute)
+13. [License](#license)
+
 
 # Kafka Lag Go
 
@@ -352,7 +354,10 @@ http://<docker-host-ip>:<metrics_port>/metrics
 
 ## Next Steps
 Please check issues section.
-For more details on usage and advanced configuration, refer to the full documentation (coming soon).
+For more details on usage and advanced configuration, refer to the full documentation located in docs folder.
+
+## How to Contribute
+Contributions are welcome! Please refer to the [How to Contribute](docs/how-to-contribute.md) guide for more information on how to get started, guidelines for submitting pull requests, and code review standards.
 
 ## License
 
