@@ -17,9 +17,8 @@ jobs:
   test:
     name: Unit test Stage
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    steps:
 
+    steps:
     - name: Checkout code
       uses: actions/checkout@v3
 
@@ -65,8 +64,8 @@ jobs:
     strategy:
       matrix:
         folder: ${{ fromJson(needs.discover-e2e-tests.outputs.e2e-folders) }}
+        
     steps:
-
     - name: Checkout code
       uses: actions/checkout@v3
 

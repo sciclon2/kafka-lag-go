@@ -76,7 +76,7 @@ run_kafka_lag_app() {
   print_debug "$DEBUG" "Checking go.mod..."
   if [ ! -f go.mod ]; then
     go mod init github.com/sciclon2/kafka-lag-go
-    go mod edit -go=1.20
+    go mod edit -go=1.21
   fi
   go mod tidy
 
