@@ -19,10 +19,6 @@ The integration tests for Kafka-Lag-Go are housed in the `test/integration/` dir
 
 The tests are run using the `run.sh` script, which ensures that the infrastructure (Kafka, Redis, etc.) is correctly set up before executing the tests. For example:
 
-<!-- add code here -->
-
-The `--only-start-infrastructure` flag can be used to start the infrastructure without running the Kafka-Lag-Go application, which is useful for integration tests where only the infrastructure (e.g., Redis, Kafka) is required. This flag allows you to avoid starting unnecessary components like the Kafka-Lag-Go app.
-
 ### Infrastructure for Each Test
 
 The infrastructure for each integration test can be customized by editing the **Docker Compose** configuration files located in each test’s folder. This allows you to launch only the necessary services (e.g., Redis, Kafka) for each test. For example, if you are testing Redis Lua scripts, you may only need Redis, so you can customize the Docker Compose file to launch Redis only.
@@ -34,6 +30,7 @@ The tests are run using the run.sh script, which ensures that the infrastructure
 ```bash
 $ test/run.sh test/integration/tests/redis_lua_scripts --only-start-infrastructure
 ```
+The `--only-start-infrastructure` flag can be used to start the infrastructure without running the Kafka-Lag-Go application, which is useful for integration tests where only the infrastructure (e.g., Redis, Kafka) is required. This flag allows you to avoid starting unnecessary components like the Kafka-Lag-Go app.
 
 You can control the infrastructure and services launched per test based on the components that are relevant for the integration scenario.
 

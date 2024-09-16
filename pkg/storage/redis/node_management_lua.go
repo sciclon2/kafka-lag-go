@@ -105,54 +105,38 @@ if ARGV[1] == "add_latest_produced_offset" then
     local ttlSeconds = tonumber(ARGV[4])  -- TTL value in seconds
     local cleanupProbability = tonumber(ARGV[5])  -- Probability as a percentage (e.g., 20 for 20%)
 
-    redis.log(redis.LOG_NOTICE, "Processing key: " .. key)
-    redis.log(redis.LOG_NOTICE, "Offset: " .. offset .. ", Timestamp: " .. newTimestamp .. ", TTL: " .. ttlSeconds .. "s, Cleanup Probability: " .. cleanupProbability .. "%")
-
     -- Optionally perform cleanup
     if math.random(100) <= cleanupProbability then
         local expiredTimestamp = newTimestamp - (ttlSeconds * 1000)  -- TTL converted to milliseconds
-        redis.log(redis.LOG_NOTICE, "Cleanup triggered. Expired timestamp threshold: " .. expiredTimestamp)
 
         -- Find and remove old entries by member (timestamp)
         local oldMembers = redis.call('ZRANGE', key, 0, -1, 'WITHSCORES')
-        redis.log(redis.LOG_NOTICE, "Found " .. tostring(#oldMembers/2) .. " members in the sorted set.")
-
         for i = 1, #oldMembers, 2 do
             local member = oldMembers[i]
             local timestamp = tonumber(member)
-            redis.log(redis.LOG_NOTICE, "Checking member with timestamp: " .. timestamp)
             if timestamp < expiredTimestamp then
                 redis.call('ZREM', key, member)
-                redis.log(redis.LOG_NOTICE, "Removed expired member with timestamp: " .. timestamp)
             end
         end
-    else
-        redis.log(redis.LOG_NOTICE, "Cleanup not triggered.")
     end
 
     -- Retrieve the last two entries in the ZSET
     local members = redis.call('ZRANGE', key, -2, -1, 'WITHSCORES')
     local memberCount = #members / 2
-    redis.log(redis.LOG_NOTICE, "There are " .. tostring(memberCount) .. " members in the last two entries.")
 
     if memberCount == 2 then
         local secondLastOffset = tonumber(members[2])
         local lastOffset = tonumber(members[4])
-        redis.log(redis.LOG_NOTICE, "Second last offset: " .. secondLastOffset .. ", Last offset: " .. lastOffset)
 
         if secondLastOffset == offset and lastOffset == offset then
             local latestMember = members[3]
             redis.call('ZREM', key, latestMember)
-            redis.log(redis.LOG_NOTICE, "Removed duplicate entry with timestamp: " .. latestMember)
         end
     end
 
     -- Add the new member (whether it's a replacement or a new entry)
     redis.call('ZADD', key, offset, newTimestamp)
-    redis.log(redis.LOG_NOTICE, "Added/Updated member with timestamp: " .. newTimestamp .. " and offset: " .. offset)
-
     redis.call('EXPIRE', key, ttlSeconds)  -- Renew TTL
-    redis.log(redis.LOG_NOTICE, "TTL set to " .. ttlSeconds .. " seconds for key: " .. key)
 
     return "Added or replaced member with timestamp " .. newTimestamp
 end
