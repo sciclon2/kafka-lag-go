@@ -15,9 +15,10 @@
     5. [Step 4: Set up Redis](#step-5-set-up-redis)
     6. [Step 5: Run the Docker Container](#step-5-run-the-docker-container)
 7. [Configuration](#configuration)
-8. [Running Unit and End-to-End (E2E) Tests](#running-unit-and-end-to-end-e2e-tests)
+8. [Running Unit, Integration and End-to-End (E2E) Tests](#running-unit-integration-and-end-to-end-e2e-tests)
     1. [Unit Tests](#unit-tests)
-    2. [End-to-End (E2E) Tests](#end-to-end-e2e-tests)
+    2. [Integration Tests](#integration-tests)
+    3. [End-to-End (E2E) Tests](#end-to-end-e2e-tests)
 9. [Health Check Feature](#health-check-feature)
 10. [Prometheus Metrics](#prometheus-metrics)
 11. [Next Steps](#next-steps)
@@ -290,7 +291,7 @@ The Kafka Lag Monitor requires a YAML configuration file to customize its behavi
 
 Please refer to the `config.go` file for more details on each configuration option.
 
-## Running Unit and End-to-End (E2E) Tests
+## Running Unit Integration and End-to-End (E2E) Tests
 
 ### Unit Tests
 
@@ -303,6 +304,12 @@ go test ./... -v -cover -count=1
 - `-v`: Enables verbose output, providing detailed information about which tests are running.
 - `-cover`: Generates a coverage report, showing how much of the code is covered by the tests.
 - `-count=1`: Disables test result caching, ensuring that the tests run fresh every time.
+
+### Integration Tests
+
+The integration tests ensure that individual components of the system (e.g., Redis, Kafka) operate as expected by validating their functionality in isolation and within small, focused workflows.
+
+For more detailed information on the integration test setup and execution, please see the [Integration Test Documentation](docs/integration-tests.md).
 
 ### End-to-End (E2E) Tests
 
