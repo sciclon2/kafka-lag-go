@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"testing"
 	"time"
 
@@ -11,6 +12,13 @@ import (
 	redis_local "github.com/sciclon2/kafka-lag-go/pkg/storage/redis"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestMain(m *testing.M) {
+	if os.Getenv("RUN_INTEGRATION_TESTS") != "true" {
+		os.Exit(0)
+	}
+	os.Exit(m.Run())
+}
 
 // Initialization function to set up the test environment
 func initRedisTest(ctx context.Context, luaScript, nodeTag string) (*redis.Client, string, error) {

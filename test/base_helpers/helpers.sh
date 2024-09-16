@@ -135,7 +135,7 @@ run_tests() {
   # Output the test type and folder name
   echo "Running $TEST_TYPE tests in folder: $BASE_DIR"
 
-  RUN_E2E_TESTS=true go test "./$BASE_DIR/..." -cover -count=1 -v
+  RUN_INTEGRATION_TESTS=true go test "./$BASE_DIR/..." -cover -count=1 -v
 }
 
 # Cleanup function to stop the application and Docker Compose services
