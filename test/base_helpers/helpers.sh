@@ -137,23 +137,21 @@ run_tests() {
 
   # Set environment variable based on the test type
   if [ "$TEST_TYPE" == "integration" ]; then
-    RUN_INTEGRATION_TESTS=true
-    echo "Running integration tests..."
+    echo "Setting environment variable: RUN_INTEGRATION_TESTS=true"
+    local ENV_VAR="RUN_INTEGRATION_TESTS=true"
   elif [ "$TEST_TYPE" == "e2e" ]; then
-    RUN_E2E_TESTS=true
-    echo "Running end-to-end (e2e) tests..."
+    echo "Setting environment variable: RUN_E2E_TESTS=true"
+    local ENV_VAR="RUN_E2E_TESTS=true"
   else
     echo "Unknown test type: $TEST_TYPE"
     exit 1
   fi
-  # Prepare the go test command
-  local GO_TEST_CMD="RUN_${TEST_TYPE^^}_TESTS=true go test \"./$BASE_DIR/...\" -cover -count=1 -v"
 
   # Print the command being executed
-  echo "Executing: $GO_TEST_CMD"
+  echo "Executing: env $ENV_VAR go test \"./$BASE_DIR/...\" -cover -count=1 -v"
 
-  # Execute the command
-  RUN_${TEST_TYPE^^}_TESTS=true go test "./$BASE_DIR/..." -cover -count=1 -v
+  # Execute the go test command with the environment variable
+  env $ENV_VAR go test "./$BASE_DIR/..." -cover -count=1 -v
 }
 
 # Cleanup function to stop the application and Docker Compose services
