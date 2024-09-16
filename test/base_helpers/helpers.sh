@@ -124,13 +124,18 @@ send_signals() {
 }
 
 
-# Function to run end-to-end tests (requires BASE_DIR)
+# Function to run end-to-end or integration tests (requires BASE_DIR)
 run_tests() {
   local BASE_DIR=$1
   local DEBUG=$2
-  local FOLDER_NAME=$(basename "$BASE_DIR")
-  echo "Running end-to-end tests: $FOLDER_NAME"
-  RUN_E2E_TESTS=true go test "./test/e2e/tests/$FOLDER_NAME/..." -cover -count=1 -v
+
+  # Extract the second folder name (e.g., "integration" or "e2e")
+  local TEST_TYPE=$(echo "$BASE_DIR" | awk -F'/' '{print $2}')
+
+  # Output the test type and folder name
+  echo "Running $TEST_TYPE tests in folder: $BASE_DIR"
+
+  RUN_E2E_TESTS=true go test "./$BASE_DIR/..." -cover -count=1 -v
 }
 
 # Cleanup function to stop the application and Docker Compose services

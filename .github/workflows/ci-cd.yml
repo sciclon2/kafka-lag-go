@@ -40,7 +40,7 @@ jobs:
 
   discover-e2e-tests:
     name: Discover E2E Test Folders
-    needs: [test]
+    needs: [integration-test]
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'release'
     outputs:
@@ -55,7 +55,7 @@ jobs:
       run: |
         folders=$(find test/e2e/tests/* -maxdepth 0 -type d)
         echo "e2e-folders=$(echo "$folders" | jq -R -s -c 'split("\n")[:-1]')" >> $GITHUB_OUTPUT
-
+        
   e2e-test:
     name: E2E Test Stage
     needs: [discover-e2e-tests]
@@ -78,7 +78,50 @@ jobs:
     - name: Run E2E tests
       run: |
         echo "Running E2E tests for folder: ${{ matrix.folder }}"
-        ./test/e2e/run.sh ${{ matrix.folder }}
+        ./test/run.sh ${{ matrix.folder }}
+
+  discover-integration-tests:
+    name: Discover Integration Test Folders
+    needs: [test]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'release'
+    outputs:
+      integration-folders: ${{ steps.set-outputs.outputs.integration-folders }}
+    steps:
+
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Discover test folders
+      id: set-outputs
+      run: |
+        folders=$(find test/integration/tests/* -maxdepth 0 -type d)
+        echo "integration-folders=$(echo "$folders" | jq -R -s -c 'split("\n")[:-1]')" >> $GITHUB_OUTPUT
+
+
+  integration-test:
+    name: Integration Test Stage
+    needs: [discover-integration-tests]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'release'
+    strategy:
+      matrix:
+        folder: ${{ fromJson(needs.discover-integration-tests.outputs.integration-folders) }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Install Docker Compose v2
+      run: |
+        mkdir -p ~/.docker/cli-plugins/
+        curl -SL https://github.com/docker/compose/releases/download/v2.15.1/docker-compose-linux-x86_64 -o ~/.docker/cli-plugins/docker-compose
+        chmod +x ~/.docker/cli-plugins/docker-compose
+
+    - name: Run Integration tests
+      run: |
+        echo "Running E2E tests for folder: ${{ matrix.folder }}"
+        ./test/run.sh ${{ matrix.folder }}
 
   build-and-push-dev:
     name: Build and Push DEV Stage
