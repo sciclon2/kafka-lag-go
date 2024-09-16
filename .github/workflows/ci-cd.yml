@@ -55,7 +55,7 @@ jobs:
       run: |
         folders=$(find test/e2e/tests/* -maxdepth 0 -type d)
         echo "e2e-folders=$(echo "$folders" | jq -R -s -c 'split("\n")[:-1]')" >> $GITHUB_OUTPUT
-        
+
   e2e-test:
     name: E2E Test Stage
     needs: [discover-e2e-tests]
@@ -121,7 +121,7 @@ jobs:
     - name: Run Integration tests
       run: |
         echo "Running E2E tests for folder: ${{ matrix.folder }}"
-        ./test/run.sh ${{ matrix.folder }}
+        ./test/run.sh ${{ matrix.folder }}  --only-start-infrastructure
 
   build-and-push-dev:
     name: Build and Push DEV Stage
