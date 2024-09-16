@@ -64,6 +64,11 @@ Every contribution that includes new functionality or changes should also includ
 ### Unit Tests
 - **Unit tests** should cover the core functionality of the new feature or fix. They should be located in the corresponding package where the change is made.
 
+### Integration Tests
+- **Integration tests** focus on testing specific components (such as Redis or Kafka) in isolation or small, focused workflows.
+- If your contribution affects how a single component functions or interacts with another service (e.g., Redis Lua scripts or Kafka clients), you should add integration tests.
+- Refer to the `test/integration/` directory for examples of existing integration tests.
+
 ### End-to-End (E2E) Tests
 - **E2E tests** may be necessary if your contribution affects how the system interacts with external services such as Kafka, Redis, or Prometheus. These tests ensure the full integration works as expected.
 - Refer to the `test/e2e/` directory for examples of existing E2E tests.

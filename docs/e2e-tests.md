@@ -20,13 +20,13 @@ The E2E tests for Kafka-Lag-Go are housed in the `test/e2e/` directory. This fol
 
 Example structure:
 
-- `test/e2e/run.sh`: Main script to run E2E tests.
+- `test/run.sh`: Main script to run tests.
 - `test/e2e/tests/`: Directory holding individual E2E tests.
 - `test/e2e/tests/[test_name]/`: Each test has its own folder with Docker Compose setup and test configurations.
 
 The tests are run using the `run.sh` script, which ensures that the infrastructure (Kafka, Redis, etc.) is correctly set up before executing the tests. For example:
 ```bash
-$ test/e2e/run.sh test/e2e/tests/prometheus_local -d 
+$ test/run.sh test/e2e/tests/prometheus_local -d 
 ```
 
 ### Automating E2E Tests in GitHub Actions

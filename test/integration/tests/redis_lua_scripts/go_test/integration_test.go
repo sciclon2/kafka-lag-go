@@ -345,3 +345,169 @@ func TestMonitorAndRemoveFailedNodes(t *testing.T) {
 	assert.NoError(t, err, "Error fetching active_nodes list")
 	assert.Equal(t, []string{nodeKey1}, activeNodes, "The only entry in active_nodes should be node-1")
 }
+
+// Test function for adding multiple offsets and verifying order in the sorted set
+func TestAddLatestProducedOffset_MultipleEntries(t *testing.T) {
+	ctx := context.Background()
+	nodeTag := "test_key" // This key will be used for the test
+
+	// Initialize the Redis test environment
+	rdb, sha, err := initRedisTest(ctx, redis_local.LuaScriptContent, nodeTag)
+	assert.NoError(t, err, "Failed to initialize Redis test environment")
+	defer cleanupRedisTest(ctx, rdb, nodeTag)
+
+	// Define multiple offsets and timestamps
+	entries := []struct {
+		offset    int
+		timestamp int64
+	}{
+		{100, time.Now().Unix()},
+		{200, time.Now().Unix() + 1},
+		{300, time.Now().Unix() + 2},
+	}
+	ttlSeconds := 60
+
+	// Add multiple entries using the Lua script
+	for _, entry := range entries {
+		keys := []string{nodeTag}
+		args := []interface{}{"add_latest_produced_offset", entry.offset, entry.timestamp, ttlSeconds, 0}
+
+		// Run the Lua script to add the offset and timestamp
+		res, err := rdb.EvalSha(ctx, sha, keys, args...).Result()
+		assert.NoError(t, err, "Error running Lua script")
+		assert.Equal(t, fmt.Sprintf("Added or replaced member with timestamp %d", entry.timestamp), res, "Unexpected result from Lua script")
+	}
+
+	// Verify that all entries exist in the sorted set and in the correct order
+	members, err := rdb.ZRangeWithScores(ctx, nodeTag, 0, -1).Result()
+	assert.NoError(t, err, "Error fetching members from the sorted set")
+	assert.Len(t, members, 3, "There should be 3 members in the sorted set")
+
+	// Verify the order of the entries by checking the offsets and timestamps
+	for i, entry := range entries {
+		assert.Equal(t, float64(entry.offset), members[i].Score, "The offset value should match")
+		assert.Equal(t, fmt.Sprintf("%d", entry.timestamp), members[i].Member.(string), "The timestamp should match")
+	}
+
+	// Check that the TTL is correctly set for the key
+	ttl, err := rdb.TTL(ctx, nodeTag).Result()
+	assert.NoError(t, err, "Error checking TTL of the key")
+	assert.GreaterOrEqual(t, ttl.Seconds(), float64(ttlSeconds-1), "TTL should be close to 60 seconds")
+}
+
+// Test function for TTL expiration
+func TestAddLatestProducedOffset_TTLExpiration(t *testing.T) {
+	ctx := context.Background()
+	nodeTag := "test_key_ttl_expiration" // This key will be used for the test
+
+	// Initialize the Redis test environment
+	rdb, sha, err := initRedisTest(ctx, redis_local.LuaScriptContent, nodeTag)
+	assert.NoError(t, err, "Failed to initialize Redis test environment")
+	defer cleanupRedisTest(ctx, rdb, nodeTag)
+
+	// Define offset, timestamp, and short TTL (1 second)
+	offset := 100
+	timestamp := time.Now().Unix()
+	ttlSeconds := 1
+
+	// Add the entry using the Lua script
+	keys := []string{nodeTag}
+	args := []interface{}{"add_latest_produced_offset", offset, timestamp, ttlSeconds, 0}
+
+	// Run the Lua script to add the offset and timestamp
+	res, err := rdb.EvalSha(ctx, sha, keys, args...).Result()
+	assert.NoError(t, err, "Error running Lua script")
+	assert.Equal(t, fmt.Sprintf("Added or replaced member with timestamp %d", timestamp), res, "Unexpected result from Lua script")
+
+	// Verify that the entry exists immediately after insertion
+	members, err := rdb.ZRangeWithScores(ctx, nodeTag, 0, -1).Result()
+	assert.NoError(t, err, "Error fetching members from the sorted set")
+	assert.Len(t, members, 1, "There should be 1 member in the sorted set")
+
+	// Wait for 2 seconds to ensure the TTL has expired
+	time.Sleep(2 * time.Second)
+
+	// Verify that the key is no longer present in Redis
+	exists, err := rdb.Exists(ctx, nodeTag).Result()
+	assert.NoError(t, err, "Error checking if key exists after TTL expiration")
+	assert.Equal(t, int64(0), exists, "The key should no longer exist after TTL expiration")
+}
+
+// Test function for cleanup logic with probability
+func TestAddLatestProducedOffset_CleanupLogic(t *testing.T) {
+	ctx := context.Background()
+	nodeTag := "test_key_cleanup" // This key will be used for the test
+
+	// Initialize the Redis test environment
+	rdb, sha, err := initRedisTest(ctx, redis_local.LuaScriptContent, nodeTag)
+	assert.NoError(t, err, "Failed to initialize Redis test environment")
+	defer cleanupRedisTest(ctx, rdb, nodeTag)
+
+	// Define initial entries with TTL (to simulate old data)
+	entries := []struct {
+		offset    int
+		timestamp int64
+	}{
+		{100, time.Now().UnixMilli() - 120000}, // 2 minutes old (in milliseconds)
+		{200, time.Now().UnixMilli() - 60000},  // 1 minute old (in milliseconds)
+	}
+	ttlSeconds := 600 // Set TTL to 10 minutes for the key epxiration
+
+	// Add the old entries
+	for _, entry := range entries {
+		keys := []string{nodeTag}
+		args := []interface{}{"add_latest_produced_offset", entry.offset, entry.timestamp, ttlSeconds, 0}
+		_, err := rdb.EvalSha(ctx, sha, keys, args...).Result()
+		assert.NoError(t, err, "Error adding initial entry")
+	}
+
+	// Verify that the initial entries exist in the sorted set
+	members, err := rdb.ZRangeWithScores(ctx, nodeTag, 0, -1).Result()
+	assert.NoError(t, err, "Error fetching members from the sorted set")
+	assert.Len(t, members, 2, "There should be 2 initial members in the sorted set")
+
+	// Add a new entry and trigger cleanup with 100% probability
+	newOffset := 300
+	newTimestamp := time.Now().UnixMilli()
+	cleanupProbability := 100 // Guarantee cleanup
+	ttlSeconds = 30           // Set TTL to 30 seconds, this will add to the key expiration 30 more seconds but the most important is it will delete entries older than 30 seconds
+	args := []interface{}{"add_latest_produced_offset", newOffset, newTimestamp, ttlSeconds, cleanupProbability}
+
+	// Run the Lua script to add the new offset and trigger cleanup
+	_, err = rdb.EvalSha(ctx, sha, []string{nodeTag}, args...).Result()
+	assert.NoError(t, err, "Error running Lua script with 100% cleanup probability")
+
+	// Verify that old entries are removed after cleanup
+	members, err = rdb.ZRangeWithScores(ctx, nodeTag, 0, -1).Result()
+	assert.NoError(t, err, "Error fetching members after cleanup")
+	assert.Len(t, members, 1, "Only 1 entry should remain after cleanup (new entry)")
+	assert.Equal(t, float64(newOffset), members[0].Score, "The remaining entry should be the new offset")
+
+	// Assert that the remaining entry after cleanup is the new entry (300 offset)
+	assert.Equal(t, float64(newOffset), members[0].Score, "The remaining entry should be the new offset 300")
+	assert.Equal(t, fmt.Sprintf("%d", newTimestamp), members[0].Member.(string), "The remaining timestamp should match the new entry's timestamp")
+
+	// Now, test with 0% cleanup probability (no cleanup)
+	// Add another entry but ensure no cleanup happens
+	noCleanupOffset := 400
+	noCleanupTimestamp := time.Now().UnixMilli()
+	noCleanupProbability := 0
+	args = []interface{}{"add_latest_produced_offset", noCleanupOffset, noCleanupTimestamp, ttlSeconds, noCleanupProbability}
+
+	// Run the Lua script with 0% cleanup probability
+	_, err = rdb.EvalSha(ctx, sha, []string{nodeTag}, args...).Result()
+	assert.NoError(t, err, "Error running Lua script with 0% cleanup probability")
+
+	// Verify that no cleanup occurred and both entries exist
+	members, err = rdb.ZRangeWithScores(ctx, nodeTag, 0, -1).Result()
+	assert.NoError(t, err, "Error fetching members after no cleanup")
+	assert.Len(t, members, 2, "Both entries should remain when cleanup probability is 0%")
+
+	// Verify the first entry is the one with offset 300
+	assert.Equal(t, float64(newOffset), members[0].Score, "The first entry should be the new offset 300")
+	assert.Equal(t, fmt.Sprintf("%d", newTimestamp), members[0].Member.(string), "The first entry's timestamp should match the new entry's timestamp")
+
+	// Verify the second entry is the one with offset 400
+	assert.Equal(t, float64(noCleanupOffset), members[1].Score, "The second entry should be the new offset 400")
+	assert.Equal(t, fmt.Sprintf("%d", noCleanupTimestamp), members[1].Member.(string), "The second entry's timestamp should match the new entry's timestamp")
+}
