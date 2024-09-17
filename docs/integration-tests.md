@@ -50,7 +50,7 @@ To add a new integration test:
 
 You can test the new integration test locally using the `run.sh` script by pointing it to the test folder:
 ```bash
-$ cp -a test/integration/tests/redis_lua_scripts test/e2e/tests/my-new-cool-test
+$ cp -a test/integration/tests/redis_lua_scripts test/integration/tests/my-new-cool-test
 $ # make sure the docker compose file has all the needed services
 $ # edit your go_test/integration_test.go
 $ # finally run the test locally
