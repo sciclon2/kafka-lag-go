@@ -21,7 +21,8 @@ func TestMain(m *testing.M) {
 }
 
 // Initialization function to set up the test environment
-func initRedisTest(ctx context.Context, luaScript, nodeTag string) (*redis.Client, string, error) {
+func initRedisTest(
+	ctx context.Context, luaScript string) (*redis.Client, string, error) {
 	// Create Redis client
 	rdb := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379", // Adjust Redis server address if needed
@@ -32,16 +33,15 @@ func initRedisTest(ctx context.Context, luaScript, nodeTag string) (*redis.Clien
 	if err != nil {
 		return nil, "", err
 	}
-
-	// Clean any existing test data
-	rdb.Del(ctx, nodeTag+":node-1", nodeTag+":node-2", nodeTag+":node-3", nodeTag+":active_nodes")
-
 	return rdb, sha, nil
 }
 
-// Cleanup function to remove test data after test execution
-func cleanupRedisTest(ctx context.Context, rdb *redis.Client, nodeTag string) {
-	rdb.Del(ctx, nodeTag+":node-1", nodeTag+":node-2", nodeTag+":active_nodes")
+// Cleanup function to remove all data from the current Redis database
+func cleanupRedisTest(ctx context.Context, rdb *redis.Client) {
+	err := rdb.FlushDB(ctx).Err()
+	if err != nil {
+		log.Fatalf("Failed to flush Redis DB: %v", err)
+	}
 }
 
 // Helper function to deregister a node
@@ -103,11 +103,11 @@ func TestRegisterOrRefreshNode(t *testing.T) {
 	nodeTag := "nodetag"
 
 	// Initialize the Redis test environment
-	rdb, sha, err := initRedisTest(ctx, redis_local.LuaScriptContent, nodeTag)
+	rdb, sha, err := initRedisTest(ctx, redis_local.LuaScriptContent)
 	if err != nil {
 		log.Fatalf("Failed to initialize Redis test: %v", err)
 	}
-	defer cleanupRedisTest(ctx, rdb, nodeTag)
+	defer cleanupRedisTest(ctx, rdb)
 
 	// Register and validate the node
 	nodeKey := nodeTag + ":node-1"
@@ -129,11 +129,11 @@ func TestRegisterOrRefreshTwoNodes(t *testing.T) {
 	nodeTag := "nodetag" // Replace with your actual nodetag value
 
 	// Initialize the Redis test environment
-	rdb, sha, err := initRedisTest(ctx, redis_local.LuaScriptContent, nodeTag)
+	rdb, sha, err := initRedisTest(ctx, redis_local.LuaScriptContent)
 	if err != nil {
 		log.Fatalf("Failed to initialize Redis test: %v", err)
 	}
-	defer cleanupRedisTest(ctx, rdb, nodeTag)
+	defer cleanupRedisTest(ctx, rdb)
 
 	// Register and validate the first node
 	nodeKey1 := nodeTag + ":node-1"
@@ -165,11 +165,11 @@ func TestDeregisterNode(t *testing.T) {
 	nodeTag := "nodetag" // Replace with your actual nodetag value
 
 	// Initialize the Redis test environment
-	rdb, sha, err := initRedisTest(ctx, redis_local.LuaScriptContent, nodeTag)
+	rdb, sha, err := initRedisTest(ctx, redis_local.LuaScriptContent)
 	if err != nil {
 		log.Fatalf("Failed to initialize Redis test: %v", err)
 	}
-	defer cleanupRedisTest(ctx, rdb, nodeTag)
+	defer cleanupRedisTest(ctx, rdb)
 
 	nodeList := nodeTag + ":active_nodes"
 
@@ -238,9 +238,9 @@ func TestGetNodeInfo(t *testing.T) {
 	nodeTag := "nodetag" // Replace with your actual nodetag value
 
 	// Initialize the Redis test environment
-	rdb, sha, err := initRedisTest(ctx, redis_local.LuaScriptContent, nodeTag)
+	rdb, sha, err := initRedisTest(ctx, redis_local.LuaScriptContent)
 	assert.NoError(t, err)
-	defer cleanupRedisTest(ctx, rdb, nodeTag)
+	defer cleanupRedisTest(ctx, rdb)
 
 	nodeList := nodeTag + ":active_nodes"
 
@@ -298,9 +298,9 @@ func TestMonitorAndRemoveFailedNodes(t *testing.T) {
 	nodeTag := "nodetag" // Replace with your actual nodetag value
 
 	// Initialize the Redis test environment
-	rdb, sha, err := initRedisTest(ctx, redis_local.LuaScriptContent, nodeTag)
+	rdb, sha, err := initRedisTest(ctx, redis_local.LuaScriptContent)
 	assert.NoError(t, err)
-	defer cleanupRedisTest(ctx, rdb, nodeTag)
+	defer cleanupRedisTest(ctx, rdb)
 
 	nodeList := nodeTag + ":active_nodes"
 
@@ -352,9 +352,9 @@ func TestAddLatestProducedOffset_MultipleEntries(t *testing.T) {
 	nodeTag := "test_key" // This key will be used for the test
 
 	// Initialize the Redis test environment
-	rdb, sha, err := initRedisTest(ctx, redis_local.LuaScriptContent, nodeTag)
+	rdb, sha, err := initRedisTest(ctx, redis_local.LuaScriptContent)
 	assert.NoError(t, err, "Failed to initialize Redis test environment")
-	defer cleanupRedisTest(ctx, rdb, nodeTag)
+	defer cleanupRedisTest(ctx, rdb)
 
 	// Define multiple offsets and timestamps
 	entries := []struct {
@@ -401,9 +401,9 @@ func TestAddLatestProducedOffset_TTLExpiration(t *testing.T) {
 	nodeTag := "test_key_ttl_expiration" // This key will be used for the test
 
 	// Initialize the Redis test environment
-	rdb, sha, err := initRedisTest(ctx, redis_local.LuaScriptContent, nodeTag)
+	rdb, sha, err := initRedisTest(ctx, redis_local.LuaScriptContent)
 	assert.NoError(t, err, "Failed to initialize Redis test environment")
-	defer cleanupRedisTest(ctx, rdb, nodeTag)
+	defer cleanupRedisTest(ctx, rdb)
 
 	// Define offset, timestamp, and short TTL (1 second)
 	offset := 100
@@ -439,9 +439,9 @@ func TestAddLatestProducedOffset_CleanupLogic(t *testing.T) {
 	nodeTag := "test_key_cleanup" // This key will be used for the test
 
 	// Initialize the Redis test environment
-	rdb, sha, err := initRedisTest(ctx, redis_local.LuaScriptContent, nodeTag)
+	rdb, sha, err := initRedisTest(ctx, redis_local.LuaScriptContent)
 	assert.NoError(t, err, "Failed to initialize Redis test environment")
-	defer cleanupRedisTest(ctx, rdb, nodeTag)
+	defer cleanupRedisTest(ctx, rdb)
 
 	// Define initial entries with TTL (to simulate old data)
 	entries := []struct {

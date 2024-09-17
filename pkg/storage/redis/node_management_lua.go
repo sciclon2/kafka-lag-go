@@ -106,7 +106,7 @@ if ARGV[1] == "add_latest_produced_offset" then
     local cleanupProbability = tonumber(ARGV[5])  -- Probability as a percentage (e.g., 20 for 20%)
 
     -- Optionally perform cleanup
-    if math.random(100) <= cleanupProbability then
+    if math.random(100) < cleanupProbability then
         local expiredTimestamp = newTimestamp - (ttlSeconds * 1000)  -- TTL converted to milliseconds
 
         -- Find and remove old entries by member (timestamp)
