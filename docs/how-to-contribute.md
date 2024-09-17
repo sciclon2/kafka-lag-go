@@ -7,6 +7,7 @@ We welcome contributions to the Kafka Lag Go project, whether it’s reporting a
 Before contributing, take a look at the documentation in the `docs` folder. It includes valuable information such as:
 
 - [Architecture Design](docs/Architecture.md): An overview of the system's design, which is helpful for understanding the codebase.
+- [Integration Tests](docs/integration-tests.md): Details on how our integration testing framework works.
 - [E2E Tests](docs/e2e-tests.md): Details on how our end-to-end testing framework works.
 
 Understanding these documents will help you navigate the project and align your contribution with its goals.
@@ -43,7 +44,7 @@ If you'd like to contribute directly by fixing a bug or adding a feature, we enc
 3. **Make Your Changes**: 
    - Add the necessary code changes to implement the feature or fix the bug.
    - Ensure you write the corresponding unit tests for your changes.
-   - For larger features, add end-to-end (E2E) tests if applicable.
+   - For larger features, add integration and/or end-to-end (E2E) tests if applicable.
 
 4. **Run Tests**: 
    - Before submitting your PR, make sure all unit tests and E2E tests pass by running them locally.
@@ -51,6 +52,8 @@ If you'd like to contribute directly by fixing a bug or adding a feature, we enc
      ```bash
      go test ./... -v -cover -count=1
      ```
+   - For Integrtion tests, follow the instructions in the [E2E Test Documentation](docs/integration-tests.md).
+
    - For E2E tests, follow the instructions in the [E2E Test Documentation](docs/e2e-tests.md).
 
 5. **Submit a Pull Request**: 
@@ -63,6 +66,11 @@ Every contribution that includes new functionality or changes should also includ
 
 ### Unit Tests
 - **Unit tests** should cover the core functionality of the new feature or fix. They should be located in the corresponding package where the change is made.
+
+### Integration Tests
+- **Integration tests** focus on testing specific components (such as Redis or Kafka) in isolation or small, focused workflows.
+- If your contribution affects how a single component functions or interacts with another service (e.g., Redis Lua scripts or Kafka clients), you should add integration tests.
+- Refer to the `test/integration/` directory for examples of existing integration tests.
 
 ### End-to-End (E2E) Tests
 - **E2E tests** may be necessary if your contribution affects how the system interacts with external services such as Kafka, Redis, or Prometheus. These tests ensure the full integration works as expected.
