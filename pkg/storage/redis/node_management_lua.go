@@ -99,45 +99,80 @@ if ARGV[1] == "monitor" then
 end
 
 if ARGV[1] == "add_latest_produced_offset" then
+    local log = ""  -- Initialize an empty log string
+
     local key = KEYS[1]  -- Use the key from KEYS[1]
     local offset = tonumber(ARGV[2])
     local newTimestamp = tonumber(ARGV[3])
     local ttlSeconds = tonumber(ARGV[4])  -- TTL value in seconds
     local cleanupProbability = tonumber(ARGV[5])  -- Probability as a percentage (e.g., 20 for 20%)
 
+    log = log .. "Processing key: " .. key .. ", Offset: " .. offset .. ", Timestamp: " .. newTimestamp .. "\n"
+    log = log .. "TTL: " .. ttlSeconds .. "s, Cleanup Probability: " .. cleanupProbability .. "%\n"
+
+    -- Log the current contents of the sorted set
+    local currentMembers = redis.call('ZRANGE', key, 0, -1, 'WITHSCORES')
+    log = log .. "Current members in the sorted set:\n"
+    for i = 1, #currentMembers, 2 do
+        local member = currentMembers[i]
+        local score = currentMembers[i + 1]
+        log = log .. "  Member: " .. member .. ", Score: " .. score .. "\n"
+    end
+
     -- Optionally perform cleanup
     if math.random(100) < cleanupProbability then
         local expiredTimestamp = newTimestamp - (ttlSeconds * 1000)  -- TTL converted to milliseconds
+        log = log .. "Cleanup triggered. Expired timestamp threshold: " .. expiredTimestamp .. "\n"
 
         -- Find and remove old entries by member (timestamp)
         local oldMembers = redis.call('ZRANGE', key, 0, -1, 'WITHSCORES')
+        log = log .. "Found " .. (#oldMembers / 2) .. " members in the sorted set.\n"
+        
         for i = 1, #oldMembers, 2 do
             local member = oldMembers[i]
             local timestamp = tonumber(member)
+            log = log .. "Checking member with timestamp: " .. timestamp .. "\n"
             if timestamp < expiredTimestamp then
                 redis.call('ZREM', key, member)
+                log = log .. "Removed member with timestamp: " .. timestamp .. "\n"
             end
         end
+    else
+        log = log .. "Cleanup not triggered.\n"
     end
 
     -- Retrieve the last two entries in the ZSET
     local members = redis.call('ZRANGE', key, -2, -1, 'WITHSCORES')
     local memberCount = #members / 2
+    log = log .. "There are " .. memberCount .. " members in the last two entries.\n"
 
     if memberCount == 2 then
         local secondLastOffset = tonumber(members[2])
         local lastOffset = tonumber(members[4])
+        log = log .. "Second last offset: " .. secondLastOffset .. ", Last offset: " .. lastOffset .. "\n"
 
         if secondLastOffset == offset and lastOffset == offset then
             local latestMember = members[3]
             redis.call('ZREM', key, latestMember)
+            log = log .. "Removed latest member with timestamp: " .. latestMember .. " due to duplicate offsets.\n"
         end
     end
 
     -- Add the new member (whether it's a replacement or a new entry)
     redis.call('ZADD', key, offset, newTimestamp)
     redis.call('EXPIRE', key, ttlSeconds)  -- Renew TTL
+    log = log .. "Added/Updated member with timestamp: " .. newTimestamp .. " and offset: " .. offset .. "\n"
+    log = log .. "TTL set to " .. ttlSeconds .. " seconds for key: " .. key .. "\n"
 
-    return "Added or replaced member with timestamp " .. newTimestamp
+    -- Log the contents of the sorted set after modification
+    local updatedMembers = redis.call('ZRANGE', key, 0, -1, 'WITHSCORES')
+    log = log .. "Updated members in the sorted set:\n"
+    for i = 1, #updatedMembers, 2 do
+        local member = updatedMembers[i]
+        local score = updatedMembers[i + 1]
+        log = log .. "  Member: " .. member .. ", Score: " .. score .. "\n"
+    end
+
+    return log
 end
 `
