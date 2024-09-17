@@ -347,6 +347,91 @@ func TestMonitorAndRemoveFailedNodes(t *testing.T) {
 }
 
 // Test function for adding multiple offsets and verifying order in the sorted set
+func TestAddLatestProducedOffset_MultipleEntries(t *testing.T) {
+	ctx := context.Background()
+	nodeTag := "test_key" // This key will be used for the test
+
+	// Initialize the Redis test environment
+	rdb, sha, err := initRedisTest(ctx, redis_local.LuaScriptContent)
+	assert.NoError(t, err, "Failed to initialize Redis test environment")
+	defer cleanupRedisTest(ctx, rdb)
+
+	// Define multiple offsets and timestamps
+	entries := []struct {
+		offset    int
+		timestamp int64
+	}{
+		{100, time.Now().Unix()},
+		{200, time.Now().Unix() + 1},
+		{300, time.Now().Unix() + 2},
+	}
+	ttlSeconds := 60
+
+	// Add multiple entries using the Lua script
+	for _, entry := range entries {
+		keys := []string{nodeTag}
+		args := []interface{}{"add_latest_produced_offset", entry.offset, entry.timestamp, ttlSeconds, 0}
+
+		// Run the Lua script to add the offset and timestamp
+		res, err := rdb.EvalSha(ctx, sha, keys, args...).Result()
+		assert.NoError(t, err, "Error running Lua script")
+		assert.Equal(t, fmt.Sprintf("Added or replaced member with timestamp %d", entry.timestamp), res, "Unexpected result from Lua script")
+	}
+
+	// Verify that all entries exist in the sorted set and in the correct order
+	members, err := rdb.ZRangeWithScores(ctx, nodeTag, 0, -1).Result()
+	assert.NoError(t, err, "Error fetching members from the sorted set")
+	assert.Len(t, members, 3, "There should be 3 members in the sorted set")
+
+	// Verify the order of the entries by checking the offsets and timestamps
+	for i, entry := range entries {
+		assert.Equal(t, float64(entry.offset), members[i].Score, "The offset value should match")
+		assert.Equal(t, fmt.Sprintf("%d", entry.timestamp), members[i].Member.(string), "The timestamp should match")
+	}
+
+	// Check that the TTL is correctly set for the key
+	ttl, err := rdb.TTL(ctx, nodeTag).Result()
+	assert.NoError(t, err, "Error checking TTL of the key")
+	assert.GreaterOrEqual(t, ttl.Seconds(), float64(ttlSeconds-1), "TTL should be close to 60 seconds")
+}
+
+// Test function for TTL expiration
+func TestAddLatestProducedOffset_TTLExpiration(t *testing.T) {
+	ctx := context.Background()
+	nodeTag := "test_key_ttl_expiration" // This key will be used for the test
+
+	// Initialize the Redis test environment
+	rdb, sha, err := initRedisTest(ctx, redis_local.LuaScriptContent)
+	assert.NoError(t, err, "Failed to initialize Redis test environment")
+	defer cleanupRedisTest(ctx, rdb)
+
+	// Define offset, timestamp, and short TTL (1 second)
+	offset := 100
+	timestamp := time.Now().Unix()
+	ttlSeconds := 1
+
+	// Add the entry using the Lua script
+	keys := []string{nodeTag}
+	args := []interface{}{"add_latest_produced_offset", offset, timestamp, ttlSeconds, 0}
+
+	// Run the Lua script to add the offset and timestamp
+	res, err := rdb.EvalSha(ctx, sha, keys, args...).Result()
+	assert.NoError(t, err, "Error running Lua script")
+	assert.Equal(t, fmt.Sprintf("Added or replaced member with timestamp %d", timestamp), res, "Unexpected result from Lua script")
+
+	// Verify that the entry exists immediately after insertion
+	members, err := rdb.ZRangeWithScores(ctx, nodeTag, 0, -1).Result()
+	assert.NoError(t, err, "Error fetching members from the sorted set")
+	assert.Len(t, members, 1, "There should be 1 member in the sorted set")
+
+	// Wait for 2 seconds to ensure the TTL has expired
+	time.Sleep(2 * time.Second)
+
+	// Verify that the key is no longer present in Redis
+	exists, err := rdb.Exists(ctx, nodeTag).Result()
+	assert.NoError(t, err, "Error checking if key exists after TTL expiration")
+	assert.Equal(t, int64(0), exists, "The key should no longer exist after TTL expiration")
+}
 
 // Test function for cleanup logic with probability
 func TestAddLatestProducedOffset_CleanupLogic(t *testing.T) {
@@ -405,7 +490,7 @@ func TestAddLatestProducedOffset_CleanupLogic(t *testing.T) {
 	// Now, test with 0% cleanup probability (no cleanup)
 	// Add another entry but ensure no cleanup happens
 	noCleanupOffset := 400
-	noCleanupTimestamp := time.Now().UnixMilli()
+	noCleanupTimestamp := time.Now().UnixMilli() + 1 // Add 1 millisecond to avoid duplicate timestamp with the previous entry
 	noCleanupProbability := 0
 	args = []interface{}{"add_latest_produced_offset", noCleanupOffset, noCleanupTimestamp, ttlSeconds, noCleanupProbability}
 
